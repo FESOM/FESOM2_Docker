@@ -14,13 +14,13 @@ To use it you have to have Docker installed.
 Better to download the lates working image:
 
 ```
-docker push koldunovn/fesom2_test:latest
+docker pull koldunovn/fesom2_test:latest
 ```
 
 Or you can buld it by yourself:
 
 ```
-    docker build --tag=fesom2_test .
+docker build --tag=fesom2_test .
     
 ```
 ### Checkout and run the model
