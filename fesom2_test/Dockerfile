@@ -23,7 +23,7 @@ RUN wget \
 RUN conda --version
 RUN conda config --add channels conda-forge
 RUN conda config --set channel_priority strict
-RUN git clone https://github.com/koldunovn/mkfesom.git
+RUN git clone https://github.com/FESOM/mkfesom.git
 WORKDIR /fesom/mkfesom/
 RUN pip install -e .
 WORKDIR /fesom/
