@@ -3,6 +3,26 @@ Installation of pyfesom2 and fdiag
 
 Install latest [pyfesom2](https://github.com/FESOM/pyfesom2) an [fdiag](https://github.com/FESOM/fdiag). The main intention is to use with Singularity, that is why we use relatively old Ubuntu installation. 
 
+Simple case scenario
+--------------------
+
+You should be able to pull the latest version of singularity image with `pyfesom2` and `fdiag` installed by
+
+```
+singularity pull library://koldunovn/default/pyfesom2:latest
+```
+
+And run commands as:
+
+```bash
+singularity exec pyfesom2_16.04.sif pfinterp
+singularity exec pyfesom2_16.04.sif fdiag
+singularity exec pyfesom2_16.04.sif pfplot
+```
+
+If you want to build it wourself
+================================
+
 Build Docker image
 ------------------
 
