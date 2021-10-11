@@ -15,9 +15,9 @@ singularity pull library://koldunovn/default/pyfesom2:latest
 And run commands as:
 
 ```bash
-singularity exec pyfesom2_16.04.sif pfinterp
-singularity exec pyfesom2_16.04.sif fdiag
-singularity exec pyfesom2_16.04.sif pfplot
+singularity exec pyfesom2_latest.sif pfinterp
+singularity exec pyfesom2_latest.sif fdiag
+singularity exec pyfesom2_latest.sif pfplot
 ```
 
 If you want to build it wourself
