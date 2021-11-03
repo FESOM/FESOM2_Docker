@@ -14,7 +14,7 @@ To use it you have to have Docker installed.
 Better to download the lates working image:
 
 ```
-docker pull koldunovn/fesom2_test:fesom2.1
+docker pull koldunovn/fesom2_test:refactoring
 ```
 
 Or you can buld it by yourself:
@@ -37,7 +37,7 @@ git clone https://github.com/FESOM/fesom2.git
 Stay in the same folder and run the container with volume mount option:
 
 ```bash
-docker run -it -v "$(pwd)"/fesom2:/fesom/fesom2 fesom2_test:fesom2.1 /bin/bash
+docker run -it -v "$(pwd)"/fesom2:/fesom/fesom2 fesom2_test:refactoring /bin/bash
 ```
 
 This should get you inside the container. You now can edit the files in your fesom2 folder (on MacOS or Linux), but run things inside the container.
