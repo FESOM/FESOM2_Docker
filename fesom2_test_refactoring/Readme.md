@@ -29,7 +29,7 @@ cd ../ #important to be outside fesom2 directory at this point
 
 Run the container
 ```bash
-docker run -it -v "$(pwd)"/fesom2:/fesom/fesom2 fesom2_test:refactoring2 /bin/bash
+docker run -it -v "$(pwd)"/fesom2:/fesom/fesom2 koldunovn/fesom2_test:refactoring2 /bin/bash
 ```
 You will end up inside the container. Now you can test FESOM2, develop new feature and test again. The simplest test run is (when within the container):
 
@@ -69,7 +69,7 @@ git clone https://github.com/FESOM/fesom2.git
 Stay in the same folder and run the container with volume mount option:
 
 ```bash
-docker run -it -v "$(pwd)"/fesom2:/fesom/fesom2 fesom2_test:refactoring2 /bin/bash
+docker run -it -v "$(pwd)"/fesom2:/fesom/fesom2 koldunovn/fesom2_test:refactoring2 /bin/bash
 ```
 
 This should get you inside the container. You now can edit the files in your fesom2 folder (on MacOS or Linux), but run things inside the container. Easy way to run the test is to execute `test.sh` script within the container. Below is besically description of the steps this test does:
