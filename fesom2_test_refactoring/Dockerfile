@@ -11,7 +11,7 @@ RUN apt-get update \
     && apt-get -y install make gfortran gcc g++ libblas-dev libopenmpi-dev \
     && apt-get -y install cmake vim git git-lfs libnetcdf-dev libnetcdff-dev libpmi2-pmix \
     && apt-get -y install wget \
-    && apt-get -y install nco cdo
+    && apt-get -y install nco cdo netcdf-bin
 
 WORKDIR /fesom/
 
