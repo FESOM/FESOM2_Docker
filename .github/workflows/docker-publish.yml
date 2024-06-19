@@ -29,7 +29,7 @@ jobs:
       - name: Find directories with Dockerfile
         id: set-matrix
         run: |
-          DOCKER_DIRS=$(find . -name Dockerfile -printf '%h\n' | jq -R -s -c 'split("\n")[:-1]')
+          DOCKER_DIRS=$(find . -name Dockerfile -printf '%h\n' | sed 's|^./||' | jq -R -s -c 'split("\n")[:-1]')
           echo "::set-output name=matrix::${DOCKER_DIRS}"
   build:
     needs: generate-matrix
