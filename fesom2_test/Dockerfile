@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 ENV PATH="/root/miniconda3/bin:${PATH}"
 ARG PATH="/root/miniconda3/bin:${PATH}"
 
@@ -10,7 +10,7 @@ RUN apt-add-repository -y universe
 RUN apt-get update
 
 RUN apt-get -y install make gfortran gcc g++ libblas-dev libopenmpi-dev
-RUN apt-get -y install cmake vim git git-lfs libnetcdf-dev libnetcdff-dev libpmi2-pmix
+RUN apt-get -y install cmake vim git git-lfs libnetcdf-dev libnetcdff-dev libpmix-dev libpmi2-0-dev libpmi2-0t64 
 RUN apt-get -y install wget
 
 WORKDIR /fesom/

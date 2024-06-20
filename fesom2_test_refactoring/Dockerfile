@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 ENV PATH="/opt/miniconda3/bin:${PATH}"
 ARG PATH="/opt/miniconda3/bin:${PATH}"
 
@@ -9,7 +9,7 @@ RUN apt-get update \
   && apt-add-repository -y universe \
   && apt-get update \
   && apt-get -y install make gfortran gcc g++ libblas-dev libopenmpi-dev \
-  && apt-get -y install cmake vim git git-lfs libnetcdf-dev libnetcdff-dev libpmi2-pmix \
+  && apt-get -y install cmake vim git git-lfs libnetcdf-dev libnetcdff-dev libpmix-dev libpmi2-0-dev libpmi2-0t64 \
   && apt-get -y install wget \
   && apt-get -y install nco cdo netcdf-bin \
   && apt-get -y install python3-pip python3-tk libudunits2-dev libproj-dev proj-bin libgeos-dev libcunit1-dev
