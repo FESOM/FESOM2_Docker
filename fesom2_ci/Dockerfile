@@ -72,10 +72,14 @@ RUN cd /oasis \
 # bld.cfg has hardcoded -I${PWD}/extern/{boost,blitz}/include paths that
 # --use_extern_boost/blitz don't rewrite.
 #
-# make_xios sources arch/arch-<arch>.env, which for GCC_LINUX hard-codes
-# $HOME/hdf5 and $HOME/netcdf4. We overwrite that file with Ubuntu's serial
-# library paths before building. arch-GCC_LINUX.path is left untouched —
-# it already references the env vars sourced from .env.
+# Two arch-GCC_LINUX overrides:
+#   - .env: upstream hardcodes $HOME/hdf5 and $HOME/netcdf4; rewrite to Ubuntu
+#     serial library paths so make_xios's `source arch.env` gives valid roots.
+#   - .fcm: upstream BASE_CFLAGS sets -ansi (= C++98) which forbids C++11
+#     lambdas as template args. XIOS 2.5 uses those (e.g. distribute_file_server2.cpp).
+#     Append -std=c++11 to override -ansi for C++ compilation.
+# arch-GCC_LINUX.path is left untouched — it already references the env vars
+# sourced from .env.
 COPY xios /xios
 RUN printf '%s\n' \
         'export HDF5_INC_DIR=/usr/include/hdf5/serial' \
@@ -83,6 +87,8 @@ RUN printf '%s\n' \
         'export NETCDF_INC_DIR=/usr/include' \
         'export NETCDF_LIB_DIR=/usr/lib/x86_64-linux-gnu' \
         > /xios/arch/arch-GCC_LINUX.env \
+    && sed -i 's|^%BASE_CFLAGS .*|%BASE_CFLAGS    -ansi -w -fPIC -std=c++11|' \
+        /xios/arch/arch-GCC_LINUX.fcm \
     && cd /xios \
     && ./make_xios --arch GCC_LINUX --fcm new \
                    --netcdf_lib netcdf4_seq --job $(nproc)
