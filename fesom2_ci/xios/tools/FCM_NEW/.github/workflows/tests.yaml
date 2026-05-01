@@ -1,0 +1,43 @@
+on: [pull_request, workflow_dispatch]
+
+jobs:
+  test:
+    strategy:
+      fail-fast: False
+      matrix:
+        ubuntu: ['ubuntu-16.04', 'ubuntu-18.04', 'ubuntu-20.04']
+    name: FCM Tests ${{matrix.ubuntu}}
+    runs-on: ${{matrix.ubuntu}}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            gfortran-9 \
+            libconfig-inifiles-perl \
+            libxml-parser-perl \
+            libdbi-perl \
+            libdbd-sqlite3-perl \
+            python-subversion libsvn-perl \
+            s-nail
+          [[ ${{matrix.ubuntu}} == "ubuntu-16.04" ]] && sudo pip install 'trac==1.2' || true
+          [[ ${{matrix.ubuntu}} == "ubuntu-18.04" ]] && sudo pip install 'trac' || true
+          echo "#!/bin/bash" >"${PWD}/bin/gfortran"
+          echo 'exec gfortran-9 "$@"' >>"${PWD}/bin/gfortran"
+          chmod +x "${PWD}/bin/gfortran"
+
+      - name: Check Perl Version
+        run: perl --version
+
+      - name: Check SVN Version
+        run: svn --version
+
+      - name: Run tests
+        run: |
+          export LOGNAME="${USER}"
+          bin/fcm test-battery -j8

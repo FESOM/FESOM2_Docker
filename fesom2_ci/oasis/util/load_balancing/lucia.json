@@ -1,0 +1,27 @@
+{
+    "Components":[
+	{"Name":"Ocean",
+	 "File":"timeline_pim_.nc"},
+	{"Name":"Atmo",
+	 "File":"timeline_pam_.nc"},
+	{"Name":"Xios",
+	 "File":"timeline_poum.nc"}
+    ],
+    "Plots":{
+	"Kind" : true,
+	"Field": true,
+	"Component": true
+    },
+    "NO TimeRange":{
+	"minFrac":0.25,
+	"maxFrac":0.5,
+	"minTime":10,
+	"nomaxTime":40
+    },
+    "Rendering":{
+	"Display":true,
+	"File":"Lucia.png",
+	"EventsBounds":false
+    },
+    "Fields":["Heat","Rain","Love"]
+}

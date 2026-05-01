@@ -1,0 +1,14 @@
+
+NETCDFROOT="${PROJECT_cesmtst}/esmtst22/gitlab/HPC_libraries/intel2019.3.199_impi2019.6.154_20191213"
+NETCDF_INCDIR="-I$NETCDFROOT/include"
+NETCDF_LIBDIR="-L $NETCDFROOT/lib"
+NETCDF_LIB="-lnetcdff -lnetcdf -lhdf5_hl -lhdf5 -lz"
+
+HDF5_INCDIR="$NETCDF_INCDIR"
+HDF5_LIBDIR="$NETCDF_LIBDIR"
+HDF5_LIB="-lhdf5_hl -lhdf5 -lz"
+
+OASIS_INCDIR="-I @oasis_inc@"
+OASIS_LIBDIR="-L @oasis_lib@"
+OASIS_LIB="-lpsmile -lscrip -lmct -lmpeu"
+

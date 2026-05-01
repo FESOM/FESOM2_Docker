@@ -1,0 +1,112 @@
+#!/bin/bash
+#-------------------------------------------------------------------------------
+# Copyright (C) 2006-2021 British Crown (Met Office) & Contributors.
+#
+# This file is part of FCM, tools for managing and building source code.
+#
+# FCM is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# FCM is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with FCM. If not, see <http://www.gnu.org/licenses/>.
+#-------------------------------------------------------------------------------
+# NAME
+#     fcm-rpmbuild
+#
+# SYNOPSIS
+#     fcm-rpmbuild [--gui] [REV]
+#     E.g.:
+#     fcm rpmbuild 2014-03
+#
+# DESCRIPTION
+#     Build an RPM for distributing FCM.
+#     Assume that the current working directory is a local Git clone containing
+#     the FCM project.
+#
+# OPTIONS
+#     --gui - add GUI packages such as "perl-Tk" and "xxdiff".
+#
+# ARGUMENTS
+#     REV - Revision to build. Default to HEAD.
+#-------------------------------------------------------------------------------
+
+set -eu
+THIS=$(basename $0)
+NAME='fcm'
+
+rpmdev-setuptree
+
+# Build RPM without no dependency on subversion or xxdiff?
+REQUIRES_GUI=
+if (($# > 0)) && [[ $1 == '--gui' ]]; then
+    REQUIRES_GUI='perl-Tk xxdiff'
+    shift 1
+fi
+
+# Create the source tree
+REV=${1:-HEAD}
+REV_NAME=$(git describe $REV)
+REV_BASE=$(git describe --abbrev=0 $REV)
+RELEASE=1
+if [[ $REV_NAME != $REV_BASE ]]; then
+    COMMIT_DATE=$(date -u +%Y%m%dT%H%M "--date=$(git show -s --format=%ci $REV)")
+    RELEASE=${COMMIT_DATE}git${REV_NAME#$REV_BASE-*-g}
+fi
+REV_BASE_DOT=$(sed 's/-/./g' <<<$REV_BASE)
+git archive --format=tar --prefix=$NAME-$REV_BASE_DOT/ $REV \
+    | (cd ~/rpmbuild/SOURCES/ && tar -xf -)
+SOURCE=~/rpmbuild/SOURCES/$NAME-$REV_BASE_DOT
+echo "FCM.VERSION=\"$REV_NAME\";" >$SOURCE/doc/etc/$NAME-version.js
+rm -r $SOURCE/{test,t}
+if [[ -z $REQUIRES_GUI ]]; then
+    rm $SOURCE/{bin/fcm_gui,lib/FCM1/Interactive/InputGetter/GUI.pm}
+fi
+
+# Create the rpmbuild spec file
+{
+    cat <<__SPEC__
+Name: $NAME
+Version: $REV_BASE_DOT
+Release: $RELEASE
+Summary: A modern Fortran build system + wrappers to SVN
+Group: Development/Tools
+License: GPLv3
+URL: https://github.com/metomi/$NAME/
+Source0: https://github.com/metomi/$NAME/releases/
+BuildArch: noarch
+Requires: diffutils filesystem gzip make perl-core perl-Config-IniFiles perl-MailTools perl-XML-Parser subversion subversion-perl $REQUIRES_GUI
+
+%description
+FCM: A modern Fortran build system + wrappers to Subversion for scientific
+software development
+
+%prep
+
+%build
+
+%install
+rm -fr %{buildroot}
+mkdir -p %{buildroot}/opt/ %{buildroot}/usr/bin
+cp -pr %_sourcedir/$NAME-$REV_BASE_DOT %{buildroot}/opt/$NAME
+cp -p %_sourcedir/$NAME-$REV_BASE_DOT/usr/bin/fcm %{buildroot}/usr/bin
+
+%clean 
+rm -fr %{buildroot}
+
+%files
+/opt/$NAME
+/usr/bin/fcm
+__SPEC__
+} >~/rpmbuild/SPECS/$NAME.spec
+
+cd ~/rpmbuild/SPECS
+rpmbuild -ba $NAME.spec
+rm -fr ~/rpmbuild/SOURCES/$NAME-$REV_BASE_DOT
+exit
