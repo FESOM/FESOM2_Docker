@@ -41,8 +41,6 @@ RUN apt-get update && apt-get install -y \
     liblapack-dev \
     libblas-dev \
     libopenblas-dev \
-    libboost-dev \
-    libblitz0-dev \
     pkg-config \
     perl \
     uuid-dev \
@@ -69,9 +67,10 @@ RUN cd /oasis \
 
 # XIOS 2.5: copy source + make_xios build to /xios. Sequential NetCDF is
 # sufficient for a build/link test of FESOM's __XIOS code path (CI doesn't
-# run XIOS). System boost (libboost-dev) and blitz (libblitz0-dev) replace
-# the bundled extern/{boost,blitz}/ which were removed to keep the source
-# commit small. FCM_NEW is used (FCM_OLD removed for the same reason).
+# run XIOS). FCM_NEW is used (FCM_OLD removed to keep the source commit
+# small); extern/boost and extern/blitz are kept bundled because XIOS's
+# bld.cfg has hardcoded -I${PWD}/extern/{boost,blitz}/include paths that
+# --use_extern_boost/blitz don't rewrite.
 #
 # make_xios sources arch/arch-<arch>.env, which for GCC_LINUX hard-codes
 # $HOME/hdf5 and $HOME/netcdf4. We overwrite that file with Ubuntu's serial
@@ -86,7 +85,6 @@ RUN printf '%s\n' \
         > /xios/arch/arch-GCC_LINUX.env \
     && cd /xios \
     && ./make_xios --arch GCC_LINUX --fcm new \
-                   --use_extern_boost --use_extern_blitz \
                    --netcdf_lib netcdf4_seq --job $(nproc)
 
 WORKDIR /
