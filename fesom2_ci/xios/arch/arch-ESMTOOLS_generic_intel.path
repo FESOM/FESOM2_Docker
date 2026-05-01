@@ -1,0 +1,12 @@
+NETCDF_INCDIR="-I $NETCDF_INC_DIR -I $NETCDF_INC_DIR_F"
+NETCDF_LIBDIR="-L $NETCDF_LIB_DIR -L $NETCDF_LIB_DIR_F"
+NETCDF_LIB="-lnetcdff -lnetcdf"
+
+MPI_INCDIR=""
+MPI_LIBDIR=""
+MPI_LIB=""
+
+#HDF5_INCDIR="-I $HDF5_INC_DIR"
+HDF5_LIBDIR="-L $HDF5_LIB_DIR"
+HDF5_LIB="-lhdf5_fortran -lhdf5hl_fortran -lhdf5_hl -lhdf5 -lz"
+

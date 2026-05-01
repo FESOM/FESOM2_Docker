@@ -1,0 +1,151 @@
+#!/usr/bin/env perl
+#-------------------------------------------------------------------------------
+# Copyright (C) 2006-2021 British Crown (Met Office) & Contributors.
+#
+# This file is part of FCM, tools for managing and building source code.
+#
+# FCM is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# FCM is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with FCM. If not, see <http://www.gnu.org/licenses/>.
+#-------------------------------------------------------------------------------
+
+use strict;
+use warnings;
+
+my %IMPL = ('fcm-dummy-diff' => \&_fcm_dummy_diff,
+            'xxdiff' => \&_xxdiff,
+            'meld'   => \&_meld,
+            'kdiff3' => \&_kdiff3);
+
+my %UNRESOLVED = (
+    'nodecision' => "You have made no decision.\n",
+    'merged'     => "You have not resolved all the conflicts.\n",
+);
+
+if (!caller()) {
+    # 0 - no diff
+    # 1 - diff
+    # other return code - fatal
+    exit main(@ARGV);
+}
+
+sub main {
+    my $command = 'xxdiff';
+    if (exists($ENV{FCM_GRAPHIC_MERGE}) && $ENV{FCM_GRAPHIC_MERGE}) {
+        $command = $ENV{FCM_GRAPHIC_MERGE};
+    }
+    if (!exists($IMPL{$command})) {
+        die("$command: merge tool not yet supported.\n");
+    }
+    $IMPL{$command}->(@_);
+}
+
+sub _fcm_dummy_diff {
+    my ($base, $mine, $older, $yours) = @_;
+    my @command = (qw{diff3}, $mine, $older, $yours);
+    print(join(" ", @command) . "\n");
+    my @out_lines = qx{@command};
+    for my $line (@out_lines) {
+        print($line);
+    }
+    return 0;
+}
+
+sub _xxdiff {
+    my ($base, $mine, $older, $yours) = @_;
+    my @command = (qw{xxdiff -m -M}, $base, qw{-O -X}, $mine, $older, $yours);
+    my @out_lines = qx{@command};
+    my $rc = $?;
+    if (!@out_lines) {
+        return 2;
+    }
+    my ($decision) = map {chomp($_); lc($_);} @out_lines;
+    if ($rc && exists($UNRESOLVED{$decision})) {
+        print($UNRESOLVED{$decision});
+        return 1;
+    }
+    printf("You %s all the changes.\n", $decision);
+    return 0;
+}
+
+sub _kdiff3 {
+    my ($base, $mine, $older, $yours) = @_;
+    my @command = (qw{kdiff3 -o}, $base, $mine, $older, $yours);
+    my @out_lines = qx{@command};
+    my $rc = $?;
+    # kdiff3 produces a file called $base.orig, so we delete that
+    unlink $base . ".orig";
+    # kdiff3 doesn't produce any output, so we just assume a non-zero
+    # exit code means unresolved merges
+    if ($rc) {
+        print($UNRESOLVED{'merged'});
+        return 1;
+    }
+    printf("You merged all the changes.\n");
+    return 0;
+}
+
+sub _meld {
+    my ($base, $mine, $older, $yours) = @_;
+    # Not using --auto-merge option as it alters the middle pane before user
+    # can review changes.
+    my @command = (qw{meld -a -o}, $base, $mine, $older, $yours);
+    my @out_lines = qx{@command};
+    my $rc = $?;
+    # meld doesn't produce any output, so we just assume a non-zero
+    # exit code means unresolved merges
+    if ($rc) {
+        print($UNRESOLVED{'merged'});
+        return 1;
+    }
+    printf("You merged all the changes.\n");
+    return 0;
+}
+
+__END__
+
+=head1 NAME
+
+fcm_graphic_merge
+
+=head1 SYNOPSIS
+
+    fcm_graphic_merge BASE MINE OLDER YOURS
+
+=head1 DESCRIPTION
+
+Invokes L<xxdiff|xxdiff> (or the command specified in the FCM_GRAPHIC_MERGE
+environment variable) to compare the CURRENT, ANCESTOR and NEW files, where possible.
+
+Wrap L<xxdiff|xxdiff>. Invoke L<xxdiff|xxdiff> as:
+
+    xxdiff -m -M BASE -O -X MINE OLDER YOURS
+
+Print friendlier decision messages.
+
+Return 0 if no diff remains, 1 if any diff remains, and 2 for fatal errors.
+
+=head1 ARGUMENTS
+
+BASE is the file you want to save the merge result into.
+
+MINE is the original file.
+
+YOURS is the file you want MINE to merge with.
+
+OLDER is the common ancestor of MINE and YOURS.
+
+=head1 COPYRIGHT
+
+Copyright (C) 2006-2021 British Crown (Met Office) & Contributors.
+
+=cut

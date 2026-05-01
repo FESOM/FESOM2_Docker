@@ -1,0 +1,6 @@
+NETCDF_INCDIR="-I /opt/netcdf42/ifort/include"
+NETCDF_LIBDIR="-L/opt/netcdf42/ifort/lib"
+NETCDF_LIB="-lnetcdf"
+HDF5_INCDIR=""
+HDF5_LIBDIR=""
+HDF5_LIB=""

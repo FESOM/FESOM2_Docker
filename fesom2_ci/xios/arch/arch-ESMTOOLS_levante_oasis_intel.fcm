@@ -1,0 +1,20 @@
+%CCOMPILER      ${CC} 
+%FCOMPILER      ${MPIFC}
+%LINKER         ${MPIFC} -nofor-main
+
+%BASE_CFLAGS    -std=c++11 -fPIC -diag-disable 1125 -diag-disable 279 -D__XIOS_EXCEPTION
+%PROD_CFLAGS    -O3 -D BOOST_DISABLE_ASSERTS -march=core-avx2 -mtune=core-avx2
+%DEV_CFLAGS     -g -traceback
+%DEBUG_CFLAGS   -DBZ_DEBUG -g -traceback -fno-inline
+
+%BASE_FFLAGS    -fPIC -D__NONE__
+%PROD_FFLAGS    -O3 -march=core-avx2 -mtune=core-avx2
+%DEV_FFLAGS     -g -O2 -traceback
+%DEBUG_FFLAGS   -g -traceback
+
+%BASE_INC       -D__NONE__
+%BASE_LD        -lstdc++
+
+%CPP            ${CC} -EP
+%FPP            fpp 
+%MAKE           gmake

@@ -1,0 +1,188 @@
+#!/bin/bash
+#-------------------------------------------------------------------------------
+# Copyright (C) 2006-2021 British Crown (Met Office) & Contributors.
+#
+# This file is part of FCM, tools for managing and building source code.
+#
+# FCM is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# FCM is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with FCM. If not, see <http://www.gnu.org/licenses/>.
+#-------------------------------------------------------------------------------
+# NAME
+#   post-commit-bg
+#
+# SYNOPSIS
+#   post-commit-bg REPOS REV
+#
+# ARGUMENTS
+#   REPOS - the path to the Subversion repository
+#   REV - the revision of the commit
+#   TXN - the commit transaction that becomes the revision
+#
+# DESCRIPTION
+#   This script performs the post-commit tasks of a Subversion repository in
+#   the background.
+#
+#   The script does the following:
+#   1. Creates an incremental revision dump of the current revision.
+#   2. Update corresponding Trac environment, if relevant.
+#   3. Size check. Warn if transaction exceeds 2MB, or the number of
+#      MB specified in "$REPOS/hooks/post-commit-size-threshold.conf".
+#   4. If this changeset has a change to "^/svnperms.conf", install its HEAD
+#      revision at "$REPOS/hooks/", or remove it from "$REPOS/hooks/" if it is
+#      removed from the HEAD.
+#   5. Runs "$REPOS/hooks/post-commit-bg-custom" and/or
+#      "$REPOS/hooks/post-commit-background-custom", if available.
+#   6. E-mails the host user account on error.
+#
+# ENVIRONMENT VARIABLES
+#   FCM_SITE_HOME
+#     The root location of site configuration.
+#   FCM_SVN_HOOK_COMMIT_DUMP_DIR
+#     The path to dump commit deltas. Generate a commit delta if specified.
+#   FCM_SVN_HOOK_TRAC_ROOT_DIR
+#     The root directories of Trac environments. Update corresponding Trac
+#     environment if specified.
+#   FCM_SVN_HOOK_REPOS_SUFFIX
+#     A suffix that should be removed from the basename of REPOS to get the
+#     name of the Trac environment. (Default is "".)
+#
+# FILES
+#   $REPOS/hooks/post-commit-bg-custom
+#   $REPOS/hooks/post-commit-background-custom
+#-------------------------------------------------------------------------------
+set -eu
+. "$(dirname $0)/trac_hook"
+
+REPOS=$1
+REV=$2
+TXN=$3
+
+export PATH=${PATH:-'/usr/local/bin:/bin:/usr/bin'}:$(dirname $0)
+THIS=$(basename $0)
+USER=${USER:-$(whoami)}
+LOG_REV="$REPOS/log/$THIS-$REV.log"
+
+main() {
+    local RET_CODE=0
+    local NOW=$(date -u +%FT%H:%M:%SZ)
+    local AUTHOR=$(svnlook author -r "$REV" "$REPOS")
+    echo "$NOW+ $REV by $AUTHOR"
+
+    # Dump revision delta
+    if [[ -n ${FCM_SVN_HOOK_COMMIT_DUMP_DIR:-} ]]; then
+        if [[ ! -d "$FCM_SVN_HOOK_COMMIT_DUMP_DIR" ]]; then
+            mkdir -p "$FCM_SVN_HOOK_COMMIT_DUMP_DIR" || true
+        fi
+        local NAME=$(basename "$REPOS")
+        local DUMP="$FCM_SVN_HOOK_COMMIT_DUMP_DIR/$NAME-$REV.gz"
+        local TMP_DUMP="$FCM_SVN_HOOK_COMMIT_DUMP_DIR/$NAME-$REV-tmp.gz"
+        echo "svnadmin dump -r$REV --incremental --deltas $REPOS | gzip \\"
+        echo "    | (dd 'conv=fsync' \"of=$TMP_DUMP\" 2>/dev/null)"
+        svnadmin dump "-r$REV" --incremental --deltas "$REPOS" | gzip \
+            | (dd 'conv=fsync' "of=$TMP_DUMP" 2>/dev/null) || RET_CODE=$?
+        if [[ -s "${TMP_DUMP}" ]]; then
+            echo "mv \"${TMP_DUMP}\" \"${DUMP}\""
+            mv "${TMP_DUMP}" "${DUMP}" || RET_CODE=$?
+        else
+            echo "[WARN] ${NAME}-${REV}: zero dump size" >&2
+            rm -f "${TMP_DUMP}"
+        fi
+    fi
+
+    # Resync Trac
+    trac_hook "$REPOS" "$REV" added || RET_CODE=$?
+
+    # Check size - send warning email if threshold exceeded
+    local MB=1048576
+    local THRESHOLD=2
+    local SIZE_THRESHOLD_FILE="${REPOS}/hooks/post-commit-size-threshold.conf"
+    if [[ -f "${SIZE_THRESHOLD_FILE}" && -r "${SIZE_THRESHOLD_FILE}" ]]; then
+        THRESHOLD=$(<"${SIZE_THRESHOLD_FILE}")
+    fi
+    local REV_FILE="${REPOS}/db/revs/$((${REV} / 1000))/${REV}"
+    local REV_FILE_SIZE=$(du -b -s "${REV_FILE}" | cut -f 1)
+    if ((${REV_FILE_SIZE} > ${THRESHOLD} * ${MB})); then
+        echo "REV_FILE_SIZE=${REV_FILE_SIZE} # >${THRESHOLD}MB"
+        RET_CODE=1
+    else
+        echo "REV_FILE_SIZE=${REV_FILE_SIZE} # <${THRESHOLD}MB"
+    fi
+
+    # Install commit.conf and svnperms.conf, if necessary
+    local NAME=$(basename "${REPOS}")
+    if [[ -n "${FCM_SVN_HOOK_REPOS_SUFFIX:-}" ]]; then
+        NAME="${NAME%${FCM_SVN_HOOK_REPOS_SUFFIX}}"
+    fi
+    local CHANGED=$(svnlook changed -r "${REV}" "${REPOS}")
+    local FILE=
+    for FILE in 'commit.conf' 'svnperms.conf'; do
+        # Ignore if there is a site override
+        if [[ -n "${FCM_SITE_HOME:-}" \
+            && -e "${FCM_SITE_HOME:-}/svn-hooks/${NAME}/${FILE}" ]]
+        then
+            continue
+        fi
+        if grep -q "^....${FILE}\$" <<<"${CHANGED}"; then
+            # Don't specify revision, so always look at latest.
+            if svnlook filesize "${REPOS}" "${FILE}" >/dev/null 2>&1; then
+                echo "svnlook cat ${REPOS} ${FILE} >${REPOS}/hooks/${FILE}"
+                svnlook cat "${REPOS}" "${FILE}" >"${REPOS}/hooks/${FILE}"
+            else
+                echo "rm -f ${REPOS}/hooks/${FILE}"
+                rm -f "${REPOS}/hooks/${FILE}"
+            fi
+        fi
+    done
+
+    # If relevant, notify owners
+    local COMMIT_CONFIG="${REPOS}/hooks/commit.conf"
+    if grep -q 'notify-owner' "$COMMIT_CONFIG" 2>/dev/null; then
+        local ADDRS=$('post-commit-bg-notify-who' "$REPOS" "$REV" "$TXN")
+        if [[ -n $ADDRS ]]; then
+            SUBJECT="-s$(basename $REPOS)@$REV by $AUTHOR"
+            FROM=
+            if [[ -n ${FCM_SVN_HOOK_NOTIFICATION_FROM:-} ]]; then
+                FROM="-r${FCM_SVN_HOOK_NOTIFICATION_FROM:-}"
+            fi
+            echo -n "svn log -v -r \"$REV\" \"file://$REPOS\""
+            echo " | mail \"$FROM\" \"$SUBJECT\" \"$ADDRS\""
+            svn log -v -r "$REV" "file://$REPOS" \
+                | mail "$FROM" "$SUBJECT" "$ADDRS"
+        fi
+    fi
+
+    # Custom hook
+    local CUSTOM_HOOK=
+    for CUSTOM_HOOK in \
+        "$REPOS/hooks/$THIS-custom" \
+        "$REPOS/hooks/post-commit-background-custom"
+    do
+        if [[ -x "$CUSTOM_HOOK" ]]; then
+            echo "$CUSTOM_HOOK $REPOS $REV $TXN"
+            "$CUSTOM_HOOK" "$REPOS" "$REV" "$TXN" || RET_CODE=$?
+        fi
+    done
+
+    echo "RET_CODE=$RET_CODE"
+    return $RET_CODE
+}
+
+if ! main 1>$LOG_REV 2>&1; then
+    if [[ -n ${FCM_SVN_HOOK_ADMIN_EMAIL:-} ]]; then
+        mail -s "[$THIS] $REPOS@$REV" "$FCM_SVN_HOOK_ADMIN_EMAIL" <"$LOG_REV" \
+            || true
+    fi
+fi
+cat "$LOG_REV"
+rm -f "$LOG_REV"
+exit

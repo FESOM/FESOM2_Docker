@@ -1,0 +1,24 @@
+################################################################################
+###################                Projet XIOS               ###################
+################################################################################
+
+%CCOMPILER      mpixlc_r
+%FCOMPILER      mpixlf90_r
+%LINKER         mpixlf90_r
+
+%BASE_CFLAGS    
+%PROD_CFLAGS    -O3 -qarch=qp -qtune=qp
+%DEV_CFLAGS     
+%DEBUG_CFLAGS   
+
+%BASE_FFLAGS    -D__NONE__ 
+%PROD_FFLAGS    -O3 -qarch=qp -qtune=qp
+%DEV_FFLAGS     
+%DEBUG_FFLAGS   
+
+%BASE_INC       -D__NONE__
+%BASE_LD        -L/opt/ibmcmp/vacpp/bg/12.1/bglib64 -libmc++
+
+%CPP            mpixlc -EP
+%FPP            cpp -P
+%MAKE           make

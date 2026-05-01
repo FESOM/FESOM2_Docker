@@ -1,0 +1,1 @@
+python remap_ECDYN.py FV2 test:latlon ECDYN_unstruct.nc  test:polygon grid_icosa.nc remap ECDYN_remap.nc 

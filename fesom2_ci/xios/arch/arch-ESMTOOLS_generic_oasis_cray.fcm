@@ -1,0 +1,20 @@
+%CCOMPILER      CC
+%FCOMPILER      ftn
+%LINKER         CC
+
+%BASE_CFLAGS    -DMPICH_SKIP_MPICXX -h msglevel_4 -h zero -h gnu -h std=c++11
+%PROD_CFLAGS    -O3 -DBOOST_DISABLE_ASSERTS
+%DEV_CFLAGS     -O3
+%DEBUG_CFLAGS   -g
+
+%BASE_FFLAGS    -J${XIOS_TOPLEVEL}/inc
+%PROD_FFLAGS    -O3 -emf
+%DEV_FFLAGS     -g -O2 -traceback -emf
+%DEBUG_FFLAGS   -g -traceback -emf
+
+%BASE_INC       -D__NONE__
+%BASE_LD        -D__NONE__
+
+%CPP            cpp
+%FPP            cpp -P
+%MAKE           make
