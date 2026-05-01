@@ -63,11 +63,18 @@ RUN git clone --depth 1 https://gitlab.dkrz.de/ec-earth/oasis3-mct.git /oasis \
 
 # XIOS 2.5: clone + make_xios build to /xios. Sequential NetCDF is sufficient
 # for a build/link test of FESOM's __XIOS code path (CI doesn't run XIOS).
-ENV NETCDF_INC_DIR=/usr/include
-ENV NETCDF_LIB_DIR=/usr/lib/x86_64-linux-gnu
-ENV HDF5_INC_DIR=/usr/include/hdf5/serial
-ENV HDF5_LIB_DIR=/usr/lib/x86_64-linux-gnu/hdf5/serial
+#
+# make_xios sources arch/arch-<arch>.env, which for GCC_LINUX hard-codes
+# $HOME/hdf5 and $HOME/netcdf4. We overwrite that file with Ubuntu's serial
+# library paths before building. arch-GCC_LINUX.path is left untouched —
+# it already references the env vars we just exported.
 RUN git clone --depth 1 https://gitlab.dkrz.de/ec-earth/xios-2.5-ece.git /xios \
+    && printf '%s\n' \
+        'export HDF5_INC_DIR=/usr/include/hdf5/serial' \
+        'export HDF5_LIB_DIR=/usr/lib/x86_64-linux-gnu/hdf5/serial' \
+        'export NETCDF_INC_DIR=/usr/include' \
+        'export NETCDF_LIB_DIR=/usr/lib/x86_64-linux-gnu' \
+        > /xios/arch/arch-GCC_LINUX.env \
     && cd /xios \
     && ./make_xios --arch GCC_LINUX --netcdf_lib netcdf4_seq --job $(nproc)
 
