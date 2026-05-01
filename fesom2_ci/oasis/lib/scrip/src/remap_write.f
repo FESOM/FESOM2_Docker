@@ -165,11 +165,15 @@ C***********************************************************************
       ENDIF
       select case(norm_opt)
       case (norm_opt_none)
-        normalize_opt = 'none'
+        normalize_opt = 'nonenone'
       case (norm_opt_frcarea)
         normalize_opt = 'fracarea'
       case (norm_opt_dstarea)
         normalize_opt = 'destarea'
+      case (norm_opt_frcartr)
+        normalize_opt = 'fracartr'
+      case (norm_opt_dstartr)
+        normalize_opt = 'destartr'
       case (norm_opt_nonorm)
         normalize_opt = 'no norm'
       end select
@@ -184,6 +188,8 @@ C***********************************************************************
         map_method = 'Gaussian weighted avg of nearest neighbors'
       case(map_type_bicubic)
         map_method = 'Bicubic remapping'
+      case(map_type_loccwgt)
+        map_method = 'Locally conservative of target nearest neighbors'
       case default
         stop 'Invalid Map Type'
       end select
@@ -274,6 +280,9 @@ C***********************************************************************
      &, itmp4             ! integer temp
 
       integer (kind=int_kind) :: il_nftype
+      integer (kind=int_kind) :: iflag
+      real (kind=dbl_kind), dimension(:),allocatable ::
+     &  wts1              ! temporary for first order conservative weights
 !-----------------------------------------------------------------------
       IF (nlogprt .GE. 2) THEN
        WRITE (UNIT = nulou,FMT = *)' '
@@ -285,7 +294,10 @@ C***********************************************************************
 !     create netCDF file for mapping and define some global attributes
 !
 !-----------------------------------------------------------------------
-      ncstat = nf_create (interp_file, NF_CLOBBER, nc_file_id)
+      iflag = NF_CLOBBER
+      if (s_cdf_filetype=='cdf2') iflag = ior(iflag,s_cdf_64bit_offset)
+      if (s_cdf_filetype=='cdf5') iflag = ior(iflag,s_cdf_64bit_data)
+      ncstat = nf_create (interp_file, iflag, nc_file_id)
       call netcdf_error_handler(ncstat)
       !***
       !*** map name
@@ -419,8 +431,13 @@ C***********************************************************************
       ncstat = nf_def_dim (nc_file_id, 'num_links', 
      &                     itmp1, nc_numlinks_id)
       call netcdf_error_handler(ncstat)
-      ncstat = nf_def_dim (nc_file_id, 'num_wgts', 
-     &                     num_wts, nc_numwgts_id)
+      if (map_type == map_type_conserv .and. conserve_opt == 1) then
+        ncstat = nf_def_dim (nc_file_id, 'num_wgts', 
+     &                       1, nc_numwgts_id)
+      else
+        ncstat = nf_def_dim (nc_file_id, 'num_wgts', 
+     &                       num_wts, nc_numwgts_id)
+      endif
       call netcdf_error_handler(ncstat)
       !***
       !*** define grid dimensions
@@ -865,13 +882,27 @@ C***********************************************************************
         ncstat = nf_put_var_int(nc_file_id, nc_dstadd_id, 
      &                          grid2_add_map1)
         call netcdf_error_handler(ncstat)
-        IF (ll_single) THEN
+
+        if (map_type == map_type_conserv .and. conserve_opt == 1) then
+          allocate(wts1(num_links_map1))
+          wts1 = wts_map1(1,:)
+          IF (ll_single) THEN
+            ncstat = nf_put_var_real(nc_file_id, nc_rmpmatrix_id, 
+     &          wts1)
+          ELSE
+            ncstat = nf_put_var_double(nc_file_id, nc_rmpmatrix_id, 
+     &          wts1)
+          ENDIF
+          deallocate(wts1)
+        else
+          IF (ll_single) THEN
             ncstat = nf_put_var_real(nc_file_id, nc_rmpmatrix_id, 
      &          wts_map1)
-        ELSE
+          ELSE
             ncstat = nf_put_var_double(nc_file_id, nc_rmpmatrix_id, 
      &          wts_map1)
-        ENDIF
+          ENDIF
+        endif
         call netcdf_error_handler(ncstat)
       else
         ncstat = nf_put_var_int(nc_file_id, nc_srcadd_id, 
@@ -881,13 +912,26 @@ C***********************************************************************
         ncstat = nf_put_var_int(nc_file_id, nc_dstadd_id, 
      &                          grid1_add_map2)
         call netcdf_error_handler(ncstat)
-        IF (ll_single) THEN
+        if (map_type == map_type_conserv .and. conserve_opt == 1) then
+          allocate(wts1(num_links_map2))
+          wts1 = wts_map2(1,:)
+          IF (ll_single) THEN
+            ncstat = nf_put_var_real(nc_file_id, nc_rmpmatrix_id, 
+     &          wts1)
+          ELSE
+            ncstat = nf_put_var_double(nc_file_id, nc_rmpmatrix_id, 
+     &          wts1)
+          ENDIF
+          deallocate(wts1)
+        else
+          IF (ll_single) THEN
             ncstat = nf_put_var_real(nc_file_id, nc_rmpmatrix_id, 
      &          wts_map2)
-        ELSE
+          ELSE
             ncstat = nf_put_var_double(nc_file_id, nc_rmpmatrix_id, 
      &          wts_map2)
-        ENDIF
+          ENDIF
+        endif
         call netcdf_error_handler(ncstat)
       endif
 
@@ -950,6 +994,7 @@ C***********************************************************************
      &, nc_rmpmatrix2_id  ! extra netCDF id for high-order remap matrix
 
       integer (kind=int_kind) :: il_nftype
+      integer (kind=int_kind) :: iflag
 
       real (kind=dbl_kind), dimension(:),allocatable ::
      &  wts1              ! CSM wants single array for 1st-order wts
@@ -963,7 +1008,10 @@ C***********************************************************************
 !
 !-----------------------------------------------------------------------
 
-      ncstat = nf_create (interp_file, NF_CLOBBER, nc_file_id)
+      iflag = NF_CLOBBER
+      if (s_cdf_filetype=='cdf2') iflag = ior(iflag,s_cdf_64bit_offset)
+      if (s_cdf_filetype=='cdf5') iflag = ior(iflag,s_cdf_64bit_data)
+      ncstat = nf_create (interp_file, iflag, nc_file_id)
       call netcdf_error_handler(ncstat)
 
       !***
@@ -1538,7 +1586,7 @@ C***********************************************************************
       call netcdf_error_handler(ncstat)
 
       if (luse_grid2_area) then
-        ncstat = nf_put_var_double(nc_file_id, itmp3, grid2_area)
+        ncstat = nf_put_var_double(nc_file_id, itmp3, grid2_area_in)
       else
         ncstat = nf_put_var_double(nc_file_id, itmp3, grid2_area)
       endif

@@ -1,8 +1,8 @@
 !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 !       NASA/GSFC, Data Assimilation Office, Code 910.3, GEOS/DAS      !
 !-----------------------------------------------------------------------
-! CVS m_ioutil.F90,v 1.16 2006-07-06 22:06:25 jacob Exp
-! CVS MCT_2_8_0  
+! CVS $Id$
+! CVS $Name$
 !-----------------------------------------------------------------------
 !BOP
 !
@@ -29,7 +29,7 @@
 ! 	16Jul96 - J. Guo	- (to do)
 ! 	02Apr97 - Jing Guo <guo@eramus> - finished the coding
 !	11Feb97 - Jing Guo <guo@thunder> - added luflush()
-!       08Nov01  - Jace A Mogill <mogill@cray.com>  FORTRAN only defines 
+!       08Nov01  - Jace A Mogill <mogill@cray.com>  FORTRAN only defines
 !                 99 units, three units below unit 10 are often used for
 !                 stdin, stdout, and stderr.  Be far more conservative
 !                 and stay within FORTRAN standard.
@@ -410,6 +410,7 @@ end function luavail
 !       08Jul02 - E. Ong <eong@mcs.anl.gov> - added flush support for nag95
 !  2001-11-08  Jace A Mogill <mogill@cray.com>  - Flush is not part of
 !              the F90 standard.  Default is NO unit flush.
+!  2020-08-03 - J. Edwards - flush is now supported by all fortran compilers
 !EOP
 !_______________________________________________________________________
   character(len=*),parameter :: myname_=myname//'::luflush'
@@ -423,15 +424,7 @@ end function luavail
   if(present(unit)) lu=unit
   if(lu < 0) return
 
-	! The following call may be system dependent.
-
-#if SYSIRIX64 || CPRNAG || SYSUNICOS
-  call flush(lu,ier)
-#elif  SYSAIX || CPRXLF
-  call flush_(lu)      ! Function defined in xlf reference document.
-#elif SYSLINUX || SYSOSF1 || SYSSUNOS || SYST3E || SYSUNIXSYSTEMV || SYSSUPERUX
   call flush(lu)
-#endif
 
 end subroutine luflush
 !-----------------------------------------------------------------------

@@ -17,12 +17,13 @@ MODULE mod_oasis_data
 
 ! GENERAL
 
-  INTEGER(kind=ip_intwp_p)  :: nulprt, nulprt1, nullucia  ! unit numbers for log files
+  INTEGER(kind=ip_intwp_p)  :: nulprt, nulprt1, nulet  ! unit numbers for log files
   INTEGER(kind=ip_i4_p)	    :: OASIS_debug
   INTEGER(kind=ip_i4_p)     :: TIMER_debug
-  INTEGER(kind=ip_i4_p)     :: LUCIA_debug
+  character(len=ic_med)     :: cdf_filetype
 
   logical                   :: enddef_called   ! true when enddef is called, for error checking
+  logical                   :: ET_debug
 
   INTEGER(kind=ip_i4_p)     :: size_namfld
   CHARACTER(len=ic_lvar), POINTER :: total_namsrcfld(:), total_namdstfld(:)
@@ -31,6 +32,10 @@ MODULE mod_oasis_data
 
   ! These are identical on all MPI tasks
   INTEGER(kind=ip_i4_p),parameter :: prism_mmodels = 20
+  ! Prime number definition for MPI intercommunicator tag generation
+  INTEGER(kind=ip_i4_p),parameter :: prime_nbs(prism_mmodels) = (/ 2,  3,  5, 7, 11, 13, 17, &
+                                                                & 19, 23, 29, 31, 37, 41, 43, &
+                                                                & 47, 53, 59, 61, 67, 71 /)
   INTEGER(kind=ip_i4_p)           :: prism_nmodels    ! number of models
   INTEGER(kind=ip_i4_p)           :: prism_amodels    ! number of active models
   character(len=ic_lvar)          :: prism_modnam(prism_mmodels)  ! model names
@@ -44,16 +49,34 @@ MODULE mod_oasis_data
 
 ! MPI
 
+  INTEGER(kind=ip_i4_p) :: mpi_comm_global_world
+  INTEGER(kind=ip_i4_p) :: mpi_rank_world
+  INTEGER(kind=ip_i4_p) :: mpi_size_world
   INTEGER(kind=ip_i4_p) :: mpi_comm_global
+
+! kh 02.12.21
+  INTEGER(kind=ip_i4_p) :: mpi_comm_global_all_groups
+
   INTEGER(kind=ip_i4_p) :: mpi_rank_global
+
   INTEGER(kind=ip_i4_p) :: mpi_size_global
   INTEGER(kind=ip_i4_p) :: mpi_comm_local
+
+! kh 02.12.21
+  INTEGER(kind=ip_i4_p) :: mpi_comm_local_all_groups
   INTEGER(kind=ip_i4_p) :: mpi_rank_local
   INTEGER(kind=ip_i4_p) :: mpi_size_local
   INTEGER(kind=ip_i4_p) :: mpi_root_local
+  INTEGER(kind=ip_i4_p) :: mpi_comm_map
+  INTEGER(kind=ip_i4_p) :: mpi_rank_map
+  INTEGER(kind=ip_i4_p) :: mpi_size_map
+  INTEGER(kind=ip_i4_p) :: mpi_root_map
+  LOGICAL               :: mpi_in_map
+  CHARACTER(len=MPI_MAX_PROCESSOR_NAME) :: mpi_node_name
   INTEGER(kind=ip_i4_p) :: mpi_err
-  INTEGER(kind=ip_i4_p),allocatable :: mpi_root_global(:)  ! for each model, the rank in comm_world 
-                                                           ! of the root process
+  INTEGER(kind=ip_i4_p),allocatable :: mpi_root_global(:)  ! for each model, the root rank in comm_world 
+  INTEGER(kind=ip_i4_p),allocatable :: mpi_comp_size(:)    ! for each model, the size of the local comm
+  character(len=ic_lvar),pointer :: compnmlist(:)
 
 ! PARAMETERS
 
@@ -78,17 +101,19 @@ CONTAINS
 
   nulprt = 6
   nulprt1 = 6
-  nullucia = 60
+  nulet = 60
   OASIS_debug = 0
   TIMER_debug = 0
-  LUCIA_debug = 0
+  ET_debug = .FALSE.
   compid = -1
   compnm = trim(cspval)
   oasis_coupled = .false.
   mpi_comm_global = -1
+  mpi_comm_global_all_groups = -1 ! kh 02.12.21
   mpi_rank_global = -1
   mpi_size_global = -1
   mpi_comm_local = -1
+  mpi_comm_local_all_groups = -1 ! kh 02.12.21
   mpi_rank_local = -1
   mpi_size_local = -1
   enddef_called = .false.

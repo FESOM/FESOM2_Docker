@@ -752,7 +752,7 @@ subroutine oasis_string_clean(string,rc)
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   character(*)             ,intent(inout) :: string  !< string
+   character(*)             ,intent(inout) :: string  !< char string
    integer(ip_i4_p),optional,intent(out)   :: rc      !< return code
 
 !EOP
@@ -1083,7 +1083,7 @@ subroutine oasis_string_listMerge(list1,list2,listout,rc)
 !EOP
 
    !----- local -----
-   character(ic_xl) :: l1,l2   ! local char strings
+   character(ic_xxl):: l1,l2   ! local char strings
    integer(ip_i4_p) :: rCode   ! return code
 
    !----- formats -----
@@ -1091,7 +1091,7 @@ subroutine oasis_string_listMerge(list1,list2,listout,rc)
 
 !-------------------------------------------------------------------------------
 ! Notes:
-! - no input or output string should be longer than ic_xl
+! - no input or output string should be longer than ic_xxl
 !-------------------------------------------------------------------------------
 
    call oasis_debug_enter(subname)
@@ -1150,7 +1150,7 @@ subroutine oasis_string_listAppend(list,listadd,rc)
 !EOP
 
    !----- local -----
-   character(ic_xl) :: l1      ! local string
+   character(ic_xxl) :: l1      ! local string
    integer(ip_i4_p) :: rCode   ! return code
 
    !----- formats -----
@@ -1158,7 +1158,7 @@ subroutine oasis_string_listAppend(list,listadd,rc)
 
 !-------------------------------------------------------------------------------
 ! Notes:
-! - no input or output string should be longer than ic_xl
+! - no input or output string should be longer than ic_xxl
 !-------------------------------------------------------------------------------
 
    call oasis_debug_enter(subname)
@@ -1215,7 +1215,7 @@ subroutine oasis_string_listPrepend(listadd,list,rc)
 !EOP
 
    !----- local -----
-   character(ic_xl) :: l1      ! local string
+   character(ic_xxl) :: l1      ! local string
    integer(ip_i4_p) :: rCode   ! return code
 
    !----- formats -----
@@ -1223,7 +1223,7 @@ subroutine oasis_string_listPrepend(listadd,list,rc)
 
 !-------------------------------------------------------------------------------
 ! Notes:
-! - no input or output string should be longer than ic_xl
+! - no input or output string should be longer than ic_xxl
 !-------------------------------------------------------------------------------
 
    call oasis_debug_enter(subname)
@@ -1687,12 +1687,12 @@ subroutine oasis_string_abort(string)
 !EOP
 
    !--- local ---
-   character(ic_xl) :: lstring
+   character(ic_xxl) :: lstring
    character(*),parameter :: subName =   "(oasis_string_abort)"
 
 !-------------------------------------------------------------------------------
 ! NOTE:
-! - no input or output string should be longer than ic_xl
+! - no input or output string should be longer than ic_xxl
 !-------------------------------------------------------------------------------
 
    call oasis_debug_enter(subname)
@@ -1702,7 +1702,7 @@ subroutine oasis_string_abort(string)
 
    if (doabort) then
       WRITE(nulprt,*) subname,estr,'abort for ',TRIM(lstring)
-      call oasis_abort()
+      call oasis_abort(file=__FILE__,line=__LINE__)
    else
       write(nulprt,*) subname,wstr,'no abort for '//trim(lstring)
       CALL oasis_flush(nulprt)

@@ -9,6 +9,7 @@ MODULE mod_oasis_mem
 
    use mod_oasis_kinds, only : ip_double_p
    use mod_oasis_sys  , only : oasis_debug_enter, oasis_debug_exit
+   use, intrinsic :: iso_c_binding
 
    implicit none
    private
@@ -23,6 +24,19 @@ MODULE mod_oasis_mem
 
    real(ip_double_p) :: mb_blk = 1.0_ip_double_p
    logical           :: initset = .false.
+
+! EXTERNAL C: C bindings to external functions
+
+   interface
+      integer(c_int) function gptlget_memusage(size,rss,share,text,datastack) bind(C)
+         use iso_c_binding, only: c_int
+         integer(c_int), intent(out) :: size
+         integer(c_int), intent(out) :: rss
+         integer(c_int), intent(out) :: share
+         integer(c_int), intent(out) :: text
+         integer(c_int), intent(out) :: datastack
+      end function gptlget_memusage
+   end interface
 
 !===============================================================================
 CONTAINS
@@ -48,8 +62,6 @@ subroutine oasis_mem_init(iunit)
    integer :: mshare,mtext,mdatastack
    integer :: ierr
  
-   integer :: GPTLget_memusage
-
    real(ip_double_p),allocatable :: mem_tmp(:)
    character(*),parameter  :: subname = '(oasis_mem_init)'
     
@@ -96,7 +108,6 @@ subroutine oasis_mem_getusage(r_msize,r_mrss)
    integer :: msize,mrss
    integer :: mshare,mtext,mdatastack
    integer :: ierr
-   integer :: GPTLget_memusage
    character(*),parameter  :: subname = '(oasis_mem_getusage)'
 
    !---------------------------------------------------

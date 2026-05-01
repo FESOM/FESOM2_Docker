@@ -1,79 +1,367 @@
 ##############################################################################
-#This is the top makefile for compiling OASIS3-MCT coupling library
-# withing the EC-Earth environment.
-#######
+
+# This is the top makefile for compiling OASIS3-MCT coupling library including
+#   static and shared versions of mct/mpeu, scrip, psmile 
+#   (i.e. interpolation and communication), and c-bindings 
+# Platform dependent settings, compiler options, cpp keys, 
+#   paths has to be set in an include file indicated in make.inc.
+# Extra targets and paths are defined in the automatically included make.common
+
+# for basic help: 
+# gmake -f TopMakefileOasis3 help
+
+########################################################################################
 
 include make.inc
+include make.common
+
+########################################################################################
 
 SHELL = /bin/sh
+ifeq ($(MAKE),gmake)
+MAKEf = $(MAKE) --no-print-directory -f TopMakefileOasis3
+else
 MAKEf = $(MAKE) -f TopMakefileOasis3
+endif
 
 # Defining path for FORTRAN and C sources
 LIBSRC  = $(COUPLE)/lib
 
-#######
-default: 
-	@$(MAKEf) makedirs
-	@$(MAKEf) makemct
-	@$(MAKEf) makelibs
-	@$(MAKEf) makepsmile
+# Log and error files for compiling
+LOGSTATIC = $(COUPLE)/util/make_dir/COMP.log
+ERRSTATIC = $(COUPLE)/util/make_dir/COMP.err
+# Log and error files for compiling the shared libraries
+LOGSHARED = $(COUPLE)/util/make_dir/COMP-shared.log
+ERRSHARED = $(COUPLE)/util/make_dir/COMP-shared.err
+# Log and error files for installing PyOasis
+LOGPYO = $(COUPLE)/util/make_dir/COMP-pyoasis.log
+ERRPYO = $(COUPLE)/util/make_dir/COMP-pyoasis.err
 
-realclean:
-	$(MAKEf) cleanlibs
+########################################################################################
+# For backwards compatibility
 
+default: static-libs-fortran
+
+oasis3_psmile: static-libs-fortran
+
+oasis3-psmile: static-libs-fortran
+
+makedirs: makedirs-static
+
+makemct: makemct-static
+
+makelibs: makescrip-static
+
+makepsmile: makepsmile-static
+
+cleanlibs: clean-static
+
+########################################################################################
+
+.DEFAULT:
+	@echo " "
+	@echo "make: *** No rule to make target \`$@\`.  Stop."
+	@$(MAKEf) help
+
+help:
+	@echo " "
+	@echo "TopMakefileOasis3 recommended targets:"
+	@echo "  static-libs         = static oasis libraries including fortran and c-bindings"
+	@echo "  shared-libs         = shared (dynamic) oasis libraries including fortran and c-bindings"
+	@echo "  pyoasis             = builds and installs shared-libs plus higher and intermediate python classes"
+	@echo "  realclean           = cleans and resets the build"
+	@echo "TopMakefileOasis3 alternative targets:"
+	@echo "  oasis3-psmile       = static-libs-fortran (for backwards compatibility)"
+	@echo "  static-libs-fortran = static oasis libraries for fortran only"
+	@echo "  shared-libs-fortran = shared (dynamic) oasis libraries for fortran only"
+	@echo " "
+
+########################################################################################
+
+static-and-shared-libs-fortran: static-libs-fortran shared-libs-fortran
+
+static-libs-fortran: check-vars
+	@echo ""
+	@echo "Compilation of the OASIS3-MCT static libraries"
+	@echo "Build output to $(LOGSTATIC)"
+	@echo "Build errors to $(ERRSTATIC)"
+	@rm -f $(LOGSTATIC) $(ERRSTATIC)
+	$(call check_defined, AR, static lib. archiver command)
+	$(call check_defined, ARFLAGS, static lib. archiver options)
+	@$(MAKEf) makedirs-static
+	@$(MAKEf) makemct-static
+	@$(MAKEf) makescrip-static
+	@$(MAKEf) makepsmile-static
+	@(echo "DONE" ; echo "")
+
+shared-libs-fortran: check-vars
+	@echo ""
+	@echo "Compilation of the OASIS3-MCT shared libraries"
+	@echo "Build output to $(LOGSHARED)"
+	@echo "Build errors to $(ERRSHARED)"
+	@rm -f $(LOGSHARED) $(ERRSHARED)
+	$(call check_defined, DYNOPT LDDYNOPT, shared lib. compilation options)
+	@$(MAKEf) makedirs-shared
+	@$(MAKEf) makemct-shared
+	@$(MAKEf) makescrip-shared
+	@$(MAKEf) makepsmile-shared
+	@(echo "DONE" ; echo "")
+
+static-libs: static-libs-fortran
+	@echo "Compilation of the OASIS3-MCT C bindings static libraries"
+	@echo "Build output to $(LOGSTATIC)"
+	@echo "Build errors to $(ERRSTATIC)"
+	@$(MAKEf) makecbindings-static
+	@(echo "DONE" ; echo "")
+
+shared-libs: shared-libs-fortran
+	@echo "Compilation of the OASIS3-MCT C bindings shared libraries"
+	@echo "Build output to $(LOGSHARED)"
+	@echo "Build errors to $(ERRSHARED)"
+	@$(MAKEf) makecbindings-shared
+	@(echo "DONE" ; echo "")
+
+pyoasis: shared-libs
+	@echo "Installation of PyOasis"
+	@echo "Build output to $(LOGPYO)"
+	@echo "Build errors to $(ERRPYO)"
+	@rm -f $(LOGPYO) $(ERRPYO)
+	$(call check_defined, MPIRUN, mpi launcher mnemonic helper)
+	@$(MAKEf) makedirs-py
+	@$(MAKEf) makepyoasis
+	@(echo "DONE" ; echo "")
+
+realclean: check-vars
+	$(MAKEf) clean-static clean-shared clean-pyoasis
+
+########################################################################################
 # Rules for creating build and library directories
-#
-makedirs:
-	@mkdir -p $(ARCHDIR)/build/lib/scrip
-	@mkdir -p $(ARCHDIR)/build/lib/mctdir
-	@mkdir -p $(ARCHDIR)/build/lib/mct
-	@mkdir -p $(ARCHDIR)/build/lib/psmile.$(CHAN)
+
+makedirs-static:
+	@echo "=> Creating directories for compiling the static libraries"
+	@echo "   in $(LIBBUILD)"
+	@mkdir -p $(LIBBUILD)/scrip
+	@mkdir -p $(LIBBUILD)/mctdir
+	@mkdir -p $(LIBBUILD)/mct
+	@mkdir -p $(LIBBUILD)/psmile.$(CHAN)
+	@mkdir -p $(LIBBUILD)/cbindings
+	@mkdir -p $(ARCHDIR)/include
 	@mkdir -p $(ARCHDIR)/lib
 
-# Rules for compiling mpeu/mct library
-# 
-makemct:
-	@echo "==> Compiling library mpeu and mct"
-	@(cd $(ARCHDIR)/build/lib/mctdir;                    \
-      cp -f -r -p $(LIBSRC)/mct/* .;                     \
-      ./configure MPIFC="$(F90)" FC="$(F90)" CC="$(CC)" CFLAGS="$(MPI_INCLUDE)" FCFLAGS="$(MPI_INCLUDE)"; \
-      $(MAKE);                                           \
-      cp -f ./*/lib*.a $(ARCHDIR)/lib/;                  \
-      cp -f ./*/*.o    $(ARCHDIR)/build/lib/mct/;        \
-      cp -f ./*/*.mod  $(ARCHDIR)/build/lib/mct/;        )
+makedirs-shared:
+	@echo "=> Creating directories for compiling the shared libraries"
+	@echo "   in $(LIBBUILDSHARED)"
+	@mkdir -p $(LIBBUILDSHARED)/scrip
+	@mkdir -p $(LIBBUILDSHARED)/mctdir
+	@mkdir -p $(LIBBUILDSHARED)/mct
+	@mkdir -p $(LIBBUILDSHARED)/psmile.$(CHAN)
+	@mkdir -p $(LIBBUILDSHARED)/cbindings
+	@mkdir -p $(ARCHDIR)/include
+	@mkdir -p $(ARCHDIR)/lib
 
-# Rules for compiling the libraries scrip and psmile
-#
-makelibs:
-	@echo "==> Compiling library scrip"
-	@(cd $(ARCHDIR)/build/lib/scrip;        \
-      cp -f $(LIBSRC)/scrip/src/Makefile .; \
-      $(modifmakefile) ;                    \
-      $(MAKE) all                           )
+makedirs-py:
+	@echo "=> Creating pyoasis installation path"
+	@mkdir -p $(ARCHDIR)/python/pyoasis
 
-makepsmile:
-	@echo "==> Compiling library psmile"
-	(cd $(ARCHDIR)/build/lib/psmile.$(CHAN); \
-     cp -f $(LIBSRC)/psmile/src/Makefile .;  \
-     $(modifmakefile);                       \
-     $(MAKE) all                             )
-
+########################################################################################
 # Rules for cleaning
-#
-cleanlibs:
-	@echo "==> Cleaning OASIS3 libraries"
-	@rm -f $(ARCHDIR)/build/lib/scrip/*
-	@rm -f $(ARCHDIR)/build/lib/mct/*
-	@rm -f -r $(ARCHDIR)/build/lib/mctdir/*
-	@rm -f $(ARCHDIR)/build/lib/psmile.$(CHAN)/*
-	@rm -f $(ARCHDIR)/lib/libscrip.a
-	@rm -f $(ARCHDIR)/lib/libmct.a
-	@rm -f $(ARCHDIR)/lib/libmpeu.a
-	@rm -f $(ARCHDIR)/lib/libpsmile.$(CHAN).a
 
-## Some rules to modify/add variables in makefiles
-#
-modifmakefile =	( echo 'include $(COUPLE)/util/make_dir/make.inc' \
-                         > infile; cat Makefile >> infile ; cp -f infile Makefile )
-#
+clean-static:
+	@echo cleaning oasis3-mct static libraries
+	rm -r -f $(LIBBUILD)/scrip
+	rm -r -f $(LIBBUILD)/mct
+	rm -r -f $(LIBBUILD)/mctdir
+	rm -r -f $(LIBBUILD)/psmile.$(CHAN)
+	rm -r -f $(ARCHDIR)/include
+	rm -r -f $(LIBBUILD)/cbindings
+	rm -f $(ARCHDIR)/lib/libscrip.a
+	rm -f $(ARCHDIR)/lib/libmct.a
+	rm -f $(ARCHDIR)/lib/libmpeu.a
+	rm -f $(ARCHDIR)/lib/libpsmile.$(CHAN).a
+	rm -f $(ARCHDIR)/lib/liboasis.cbind.a
+
+clean-shared:
+	@echo cleaning oasis3-mct shared libraries
+	rm -r -f $(LIBBUILDSHARED)/scrip
+	rm -r -f $(LIBBUILDSHARED)/mct
+	rm -r -f $(LIBBUILDSHARED)/mctdir
+	rm -r -f $(LIBBUILDSHARED)/psmile.$(CHAN)
+	rm -r -f $(LIBBUILDSHARED)/cbindings
+	rm -r -f $(ARCHDIR)/include
+	rm -f $(ARCHDIR)/lib/libscrip.so
+	rm -f $(ARCHDIR)/lib/libmct.so
+	rm -f $(ARCHDIR)/lib/libmpeu.so
+	rm -f $(ARCHDIR)/lib/libpsmile.$(CHAN).so
+	rm -f $(ARCHDIR)/lib/liboasis.cbind.so
+
+clean-pyoasis:
+	@echo cleaning pyoasis
+	rm -r -f $(ARCHDIR)/python
+
+########################################################################################
+# Rules for compiling mpeu/mct library
+
+makemct-static:
+	@echo "=> Configuring libraries mpeu and mct"
+	@(cd $(LIBBUILD)/mctdir; cp -f -r -p $(LIBSRC)/mct/* .;\
+         ./configure MPIFC="$(F90) $(STATOPT)" FC="$(F90) $(STATOPT)" CC="$(CC) " \
+         1>> $(LOGSTATIC) 2>> $(ERRSTATIC) ;)
+	@echo "=> Compiling libraries mpeu and mct"
+	@(cd $(LIBBUILD)/mctdir; \
+         $(MAKE) 1>> $(LOGSTATIC) 2>> $(ERRSTATIC) ;)
+	@echo "=> Installing libraries mpeu and mct"
+	@(cd $(LIBBUILD)/mctdir; \
+         cp -f ./*/lib*.a   $(ARCHDIR)/lib/; \
+         cp -f ./*/*.o    $(LIBBUILD)/mct/; \
+         cp -f ./*/*.mod  $(LIBBUILD)/mct/; \
+         cp -f ./*/*.mod  $(ARCHDIR)/include/;)
+
+makemct-shared:
+	@echo "=> Configuring shared libraries mpeu and mct"
+	@(cd $(LIBBUILDSHARED)/mctdir; cp -f -r -p $(LIBSRC)/mct/* .;\
+         ./configure MPIFC="$(F90) $(DYNOPT)" FC="$(F90) $(DYNOPT)" CC="$(CC) $(DYNOPT)" \
+         1>> $(LOGSHARED) 2>> $(ERRSHARED) ;)
+	@echo "=> Compiling shared libraries mpeu and mct"
+	@(cd $(LIBBUILDSHARED)/mctdir; \
+	 $(MAKE) 1>> $(LOGSHARED) 2>> $(ERRSHARED) ; )
+	@echo "=> Creating shared library libmpeu.so"
+	@(cd $(LIBBUILDSHARED)/mctdir ; \
+	 $(F90) $(DYNOPT) $(LDFLAGS) $(LDDYNOPT) \
+         -o $(ARCHDIR)/lib/libmpeu.so ./mpeu/*.o $(NETCDF_LIBRARY); )
+	@echo "=> Creating shared library libmct.so"
+	@(cd $(LIBBUILDSHARED)/mctdir ; \
+	 $(F90) $(DYNOPT) $(LDFLAGS) $(LDDYNOPT) \
+         -o $(ARCHDIR)/lib/libmct.so ./mct/*.o -L$(ARCHDIR)/lib -lmpeu $(NETCDF_LIBRARY); )
+	@echo "=> Installing shared libraries mpeu and mct"
+	@(cd $(LIBBUILDSHARED)/mctdir ; \
+         cp -f ./*/*.o    $(LIBBUILDSHARED)/mct/; \
+         cp -f ./*/*.mod  $(LIBBUILDSHARED)/mct/; \
+         cp -f ./*/*.mod  $(ARCHDIR)/include/;)
+
+########################################################################################
+# Rules for compiling the libraries scrip
+
+makescrip-static:
+	@echo "=> Compiling library scrip"
+	@(cd $(LIBBUILD)/scrip; cp -f $(LIBSRC)/scrip/src/Makefile .;\
+         $(modifmakefile) ; $(MAKE) all 1>> $(LOGSTATIC) 2>> $(ERRSTATIC) )
+	@echo "=> Installing scrip modules"
+	@(cd $(LIBBUILD)/scrip ; \
+         cp -f *.mod  $(ARCHDIR)/include/;)
+
+makescrip-shared:
+	@echo "=> Compiling shared library scrip"
+	@(cd $(LIBBUILDSHARED)/scrip; cp -f $(LIBSRC)/scrip/src/Makefile .;\
+         $(modifmakefile) ; $(MAKE) shared 1>> $(LOGSHARED) 2>> $(ERRSHARED) )
+	@echo "=> Installing scrip modules"
+	@(cd $(LIBBUILDSHARED)/scrip ; \
+         cp -f *.mod  $(ARCHDIR)/include/;)
+
+########################################################################################
+# Rules for compiling the libraries psmile
+
+makepsmile-static:
+	@echo "=> Compiling library psmile"
+	@(cd $(LIBBUILD)/psmile.$(CHAN) ; \
+         cp -f $(LIBSRC)/psmile/src/Makefile . ; $(modifmakefile) ; \
+         $(MAKE) all 1>> $(LOGSTATIC) 2>> $(ERRSTATIC) ; )
+	@echo "=> Installing library psmile"
+	@(cd $(LIBBUILD)/psmile.$(CHAN) ; \
+	 cp -f *.mod $(ARCHDIR)/include ; )
+
+makepsmile-shared:
+	@echo "=> Compiling shared library psmile"
+	@(cd $(LIBBUILDSHARED)/psmile.$(CHAN) ; \
+         cp -f $(LIBSRC)/psmile/src/Makefile . ; $(modifmakefile) ; \
+         $(MAKE) shared 1>> $(LOGSHARED) 2>> $(ERRSHARED) ; )
+	@echo "=> Installing shared library psmile"
+	@(cd $(LIBBUILDSHARED)/psmile.$(CHAN) ; \
+	 cp -f *.mod $(ARCHDIR)/include ; )
+
+########################################################################################
+# Rules for compiling the oasis C bindings
+
+makecbindings-static:
+	@echo "=> Compiling the C bindings static"
+	@(cd $(LIBBUILD)/cbindings ; \
+	 cp -f -r -p $(LIBSRC)/cbindings/Makefile .; $(modifmakefile) ; \
+         $(MAKE) libstatic 1>> $(LOGSTATIC) 2>> $(ERRSTATIC) )
+	@echo "=> Installing cbindings modules"
+	@(cd $(LIBBUILD)/cbindings ; \
+         cp -f *.mod  $(ARCHDIR)/include/;)
+
+makecbindings-shared:
+	@echo "=> Compiling the C bindings shared"
+	@(cd $(LIBBUILDSHARED)/cbindings ; \
+	 cp -f -r -p $(LIBSRC)/cbindings/Makefile .; $(modifmakefile) ; \
+         $(MAKE) libshared 1>> $(LOGSHARED) 2>> $(ERRSHARED) )
+	@echo "=> Installing cbindings modules"
+	@(cd $(LIBBUILDSHARED)/cbindings ; \
+         cp -f *.mod  $(ARCHDIR)/include/;)
+
+########################################################################################
+# Rules for installing the PyOasis python modules
+
+makepyoasis:
+	@echo "=> Installing the PyOasis Modules"
+	@(cp -f -r -p $(COUPLE)/pyoasis/src/* $(ARCHDIR)/python/pyoasis \
+          1>> $(LOGPYO) 2>> $(ERRPYO) )
+	@echo export PYOASIS_ROOT=${ARCHDIR} > ${ARCHDIR}/python/init.sh
+	@echo setenv PYOASIS_ROOT ${ARCHDIR} > ${ARCHDIR}/python/init.csh
+	@echo export LD_LIBRARY_PATH=\$${PYOASIS_ROOT}/lib:\$${LD_LIBRARY_PATH} >> ${ARCHDIR}/python/init.sh
+	@echo setenv LD_LIBRARY_PATH \$${PYOASIS_ROOT}/lib:\$${LD_LIBRARY_PATH} >> ${ARCHDIR}/python/init.csh
+	@echo export PYTHONPATH=\$${PYOASIS_ROOT}/python:\$${PYTHONPATH} >> ${ARCHDIR}/python/init.sh
+	@echo setenv PYTHONPATH \$${PYOASIS_ROOT}/python:\$${PYTHONPATH} >> ${ARCHDIR}/python/init.csh
+	@echo export MPIRUN4PY=\"${MPIRUN}\" >> ${ARCHDIR}/python/init.sh
+	@echo setenv MPIRUN4PY \"${MPIRUN}\" >> ${ARCHDIR}/python/init.csh
+	@echo
+	@echo =====================================================================
+	@echo The following lines have been put in the file
+	@echo \"${ARCHDIR}/python/init.sh\"
+	@echo
+	@cat ${ARCHDIR}/python/init.sh
+	@echo
+	@echo The following lines have been put in the file
+	@echo \"${ARCHDIR}/python/init.csh\"
+	@echo
+	@cat ${ARCHDIR}/python/init.csh
+	@echo
+	@echo Before using pyOASIS issue the command:
+	@echo \"source ${ARCHDIR}/python/init.sh\"
+	@echo    or
+	@echo \"source ${ARCHDIR}/python/init.csh\"
+	@echo Alternatively, these lines could be added to your \"\~/.bashrc\" or \"\~/.cshrc\" file. 
+	@echo =====================================================================
+	@echo
+
+########################################################################################
+# Rules for checks
+
+check-vars:
+	$(call check_defined, COUPLE, Root of the source directory)
+	$(call check_defined, ARCHDIR, Root of the installation path)
+	$(call check_defined, CHAN, MPI flavour MPI1/MPI2)
+	$(call check_defined, MAKE, the make command make/gmake)
+	$(call check_defined, F90 F f90 f CC, compiler command)
+	$(call check_defined, F90FLAGS f90FLAGS FFLAGS fFLAGS CCFLAGS, \
+	                      compilation options)
+
+# Params:
+#   1. Variable name(s) to test.
+#   2. (optional) Error message to print.
+check_defined = \
+    $(strip $(foreach 1,$1, \
+        $(call __check_defined,$1,$(strip $(value 2)))))
+__check_defined = \
+    $(if $(value $1),, \
+      $(error Undefined $1$(if $2, ($2))))
+
+########################################################################################
+# Some rules to modify/add variables in makefiles
+
+modifmakefile =	( echo 'include $(COUPLE)/util/make_dir/make.inc'  > infile;\
+                  echo 'include $(COUPLE)/util/make_dir/make.common' >> infile;\
+                  cat Makefile >> infile ; \
+                  cp -f infile Makefile )
+
 ########################################################################################

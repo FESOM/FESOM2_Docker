@@ -37,6 +37,7 @@ MODULE mod_oasis_map
      type(mct_sMatP),pointer :: sMatP(:)  !< stores mapping data such as weights
      integer(kind=ip_i4_p) :: nwgts       !< number of weights in weights file
      character(len=ic_long):: file        !< file to read/write
+     character(len=ic_long):: file2       !< alternate file to read/write
      character(len=ic_med) :: loc         !< location setting, src or dst model
      character(len=ic_med) :: opt         !< optimization setting, bfb, sum, or opt
      character(len=ic_med) :: optval      !< mct map setting, src or dst, derived from opt
@@ -45,9 +46,6 @@ MODULE mod_oasis_map
      integer(kind=ip_i4_p) :: dpart       !< dst partition
      character(len=ic_med) :: srcgrid     !< source grid name
      character(len=ic_med) :: dstgrid     !< target grid name
-     logical               :: AVred       !< flag indicating AV_ms, AV_md data has been read
-     type(mct_aVect)       :: AV_ms       !< stores data for CONSERV for src such as mask and area
-     type(mct_aVect)       :: AV_md       !< stores data for CONSERV for dst such as mask and area
   end type prism_mapper_type
 
   integer(kind=ip_i4_p)   ,public :: prism_mmapper   !< max mappers
@@ -64,6 +62,8 @@ MODULE mod_oasis_map
   real(R8),private,allocatable :: Snew(:,:),Sold(:,:)  ! reals
   integer,private,allocatable :: Rnew(:),Rold(:)  ! ints
   integer,private,allocatable :: Cnew(:),Cold(:)  ! ints
+
+  logical, parameter :: local_timers_on = .false.
 
 !------------------------------------------------------------
 CONTAINS
@@ -88,16 +88,20 @@ CONTAINS
   integer(ip_i4_p)              :: src_size,src_rank, ncrn_src
   integer(ip_i4_p) ,allocatable :: src_dims(:),src_mask(:)
   real(ip_double_p),allocatable :: src_lon(:),src_lat(:)
+  real(ip_double_p),allocatable :: src_area(:)
   real(ip_double_p),allocatable :: src_corner_lon(:,:),src_corner_lat(:,:)
   integer(ip_i4_p)              :: dst_size,dst_rank, ncrn_dst
   integer(ip_i4_p) ,allocatable :: dst_dims(:),dst_mask(:)
   real(ip_double_p),allocatable :: dst_lon(:),dst_lat(:)
+  real(ip_double_p),allocatable :: dst_area(:)
   real(ip_double_p),allocatable :: dst_corner_lon(:,:),dst_corner_lat(:,:)
   integer(ip_i4_p) ,allocatable :: ifld2(:,:)
   real(ip_double_p),allocatable :: fld2(:,:),fld3(:,:,:)
   integer(ip_i4_p) :: i,j,k,icnt,nx,ny,nc
   logical :: lextrapdone
   logical :: do_corners
+  logical :: ll_src_area_in
+  logical :: ll_dst_area_in
   character(len=ic_med) :: filename
   character(len=ic_med) :: fldname
   character(len=*),parameter :: subname = '(oasis_map_genmap)'
@@ -113,10 +117,9 @@ CONTAINS
 
   if (trim(namscrtyp(namID)) /= 'SCALAR') then
      write(nulprt,*) subname,estr,'only scrip type SCALAR mapping supported'
-     CALL oasis_abort()
+     call oasis_abort(file=__FILE__,line=__LINE__)
   endif
 
-  
   do_corners = .false.
   if (trim(namscrmet(namID)) == 'CONSERV') then
      do_corners = .true.
@@ -143,12 +146,13 @@ CONTAINS
   allocate(src_mask(src_size))
   allocate(src_lon (src_size))
   allocate(src_lat (src_size))
+  allocate(src_area (src_size))
   allocate(src_corner_lon(ncrn_src,src_size))
   allocate(src_corner_lat(ncrn_src,src_size))
 
-  allocate(ifld2(nx,ny))
   filename = 'masks.nc'
   fldname = trim(namsrcgrd(namID))//'.msk'
+  allocate(ifld2(nx,ny))
   call oasis_io_read_field_fromroot(filename,fldname,ifld2=ifld2)
   icnt = 0; do j = 1,ny; do i = 1,nx; icnt = icnt + 1
      src_mask(icnt) = ifld2(i,j)
@@ -158,6 +162,22 @@ CONTAINS
   deallocate(ifld2)
 
   allocate(fld2(nx,ny))
+
+  filename = 'areas.nc'
+  fldname = trim(namsrcgrd(namID))//'.srf'
+  if (oasis_io_varexists(filename,fldname)) then
+     ll_src_area_in = .true.
+     call oasis_io_read_field_fromroot(filename,fldname,fld2=fld2)
+     icnt = 0; do j = 1,ny; do i = 1,nx; icnt = icnt + 1
+        src_area(icnt) = fld2(i,j)
+     enddo; enddo
+     if (OASIS_debug >= 15) write(nulprt,*) subname,' read ',trim(filename),' ',trim(fldname), &
+         minval(src_area),maxval(src_area)
+  else
+     ll_src_area_in = .false.
+     src_area = -9999.
+  endif
+
   filename = 'grids.nc'
   fldname = trim(namsrcgrd(namID))//'.lon'
   call oasis_io_read_field_fromroot(filename,fldname,fld2=fld2)
@@ -166,6 +186,7 @@ CONTAINS
   enddo; enddo
   if (OASIS_debug >= 15) write(nulprt,*) subname,' read ',trim(filename),' ',trim(fldname), &
      minval(src_lon),maxval(src_lon)
+
   fldname = trim(namsrcgrd(namID))//'.lat'
   call oasis_io_read_field_fromroot(filename,fldname,fld2=fld2)
   icnt = 0; do j = 1,ny; do i = 1,nx; icnt = icnt + 1
@@ -173,6 +194,7 @@ CONTAINS
   enddo; enddo
   if (OASIS_debug >= 15) write(nulprt,*) subname,' read ',trim(filename),' ',trim(fldname), &
      minval(src_lat),maxval(src_lat)
+
   deallocate(fld2)
 
   if (do_corners) then
@@ -222,12 +244,13 @@ CONTAINS
   allocate(dst_mask(dst_size))
   allocate(dst_lon (dst_size))
   allocate(dst_lat (dst_size))
+  allocate(dst_area (dst_size))
   allocate(dst_corner_lon(ncrn_dst,dst_size))
   allocate(dst_corner_lat(ncrn_dst,dst_size))
 
-  allocate(ifld2(nx,ny))
   filename = 'masks.nc'
   fldname = trim(namdstgrd(namID))//'.msk'
+  allocate(ifld2(nx,ny))
   call oasis_io_read_field_fromroot(filename,fldname,ifld2=ifld2)
   icnt = 0; do j = 1,ny; do i = 1,nx; icnt = icnt + 1
      dst_mask(icnt) = ifld2(i,j)
@@ -237,6 +260,22 @@ CONTAINS
   deallocate(ifld2)
 
   allocate(fld2(nx,ny))
+
+  filename = 'areas.nc'
+  fldname = trim(namdstgrd(namID))//'.srf'
+  if (oasis_io_varexists(filename,fldname)) then
+     ll_dst_area_in = .true.
+     call oasis_io_read_field_fromroot(filename,fldname,fld2=fld2)
+     icnt = 0; do j = 1,ny; do i = 1,nx; icnt = icnt + 1
+        dst_area(icnt) = fld2(i,j)
+     enddo; enddo
+     if (OASIS_debug >= 15) write(nulprt,*) subname,' read ',trim(filename),' ',trim(fldname), &
+         minval(dst_area),maxval(dst_area)
+  else
+     ll_dst_area_in = .false.
+     dst_area = -9999.
+  endif
+
   filename = 'grids.nc'
   fldname = trim(namdstgrd(namID))//'.lon'
   call oasis_io_read_field_fromroot(filename,fldname,fld2=fld2)
@@ -245,6 +284,7 @@ CONTAINS
   enddo; enddo
   if (OASIS_debug >= 15) write(nulprt,*) subname,' read ',trim(filename),' ',trim(fldname), &
      minval(dst_lon),maxval(dst_lon)
+
   fldname = trim(namdstgrd(namID))//'.lat'
   call oasis_io_read_field_fromroot(filename,fldname,fld2=fld2)
   icnt = 0; do j = 1,ny; do i = 1,nx; icnt = icnt + 1
@@ -252,6 +292,7 @@ CONTAINS
   enddo; enddo
   if (OASIS_debug >= 15) write(nulprt,*) subname,' read ',trim(filename),' ',trim(fldname), &
      minval(dst_lat),maxval(dst_lat)
+
   deallocate(fld2)
 
   if (do_corners) then
@@ -281,10 +322,10 @@ CONTAINS
      dst_corner_lat = -9999.
   endif
 
-  IF (OASIS_debug >= 15) THEN
-      WRITE(nulprt,*) subname,' call grid_init '
-      CALL oasis_flush(nulprt)
-  ENDIF
+  if (OASIS_debug >= 15) THEN
+     write(nulprt,*) subname,' call grid_init '
+     call oasis_flush(nulprt)
+  endif
 
   !--- 0/1 mask convention opposite in scrip vs oasis
   src_mask = 1 - src_mask
@@ -296,32 +337,40 @@ CONTAINS
        src_lat,  src_lon,  dst_lat,  dst_lon, &
        src_corner_lat, src_corner_lon, &
        dst_corner_lat, dst_corner_lon, &
-       logunit=nulprt)
+       ll_src_area_in, src_area,  &
+       ll_dst_area_in, dst_area,  &
+       ilogunit=nulprt,ilogprt=OASIS_debug)
   if (OASIS_debug >= 15) then
-      WRITE(nulprt,*) subname,' done grid_init '
-      CALL oasis_flush(nulprt)
-  ENDIF
+     write(nulprt,*) subname,' done grid_init '
+     call oasis_flush(nulprt)
+  endif
 
-  IF (OASIS_debug >= 15) THEN
-      WRITE(nulprt,*) subname,' call scrip '
-      CALL oasis_flush(nulprt)
-  ENDIF
+  if (OASIS_debug >= 15) THEN
+     write(nulprt,*) subname,' call scrip '
+     call oasis_flush(nulprt)
+  endif
+  if (local_timers_on) call oasis_timer_start('cpl_genmap_scrip')
   call scrip(prism_mapper(mapid)%file,prism_mapper(mapid)%file,namscrmet(namID), &
-             namscrnor(namID),lextrapdone,namscrvam(namID),namscrnbr(namID))
-  IF (OASIS_debug >= 15) THEN
-      WRITE(nulprt,*) subname,' done scrip '
-      CALL oasis_flush(nulprt)
-  ENDIF
+             namscrnor(namID),lextrapdone,namscrvam(namID),namscrnbr(namID),namscrord(namID), &
+             namscrnth(namID),namscrsth(namID), &
+             mpi_comm_map, mpi_size_map, mpi_rank_map, mpi_root_map, namcdftyp)
+  if (local_timers_on) call oasis_timer_stop('cpl_genmap_scrip') 
+  if (OASIS_debug >= 15) THEN
+     write(nulprt,*) subname,' done scrip '
+     call oasis_flush(nulprt)
+  endif
 
   deallocate(src_dims, dst_dims)
   deallocate(src_mask)
   deallocate(src_lon)
   deallocate(src_lat)
+  deallocate(src_area)
   deallocate(src_corner_lon)
   deallocate(src_corner_lat)
   deallocate(dst_mask)
   deallocate(dst_lon)
   deallocate(dst_lat)
+  deallocate(dst_area)
   deallocate(dst_corner_lon)
   deallocate(dst_corner_lat)
 
@@ -418,6 +467,7 @@ subroutine oasis_map_sMatReaddnc_orig(sMat,SgsMap,DgsMap,newdom, &
    integer           :: nread   ! number of reads 
    logical           :: mywt    ! does this weight belong on my pe
    integer           :: dims(2) 
+   logical           :: abort_weight ! flag if bad weight found
 
    !--- buffers for i/o ---
    real(R8)   ,allocatable :: rtemp(:) ! real temporary
@@ -462,79 +512,136 @@ subroutine oasis_map_sMatReaddnc_orig(sMat,SgsMap,DgsMap,newdom, &
 !
 !-------------------------------------------------------------------------------
 
- call oasis_debug_enter(subname)
- call oasis_mpi_commsize(mpicom,commsize)
- nwgts = -1
- if (mytask == 0) then
-   if (OASIS_debug >= 2) write(nulprt,*) subname," reading mapping matrix data decomposed..."
+   call oasis_debug_enter(subname)
+   call oasis_mpi_commsize(mpicom,commsize)
+   nwgts = -1
+   if (local_timers_on) call oasis_timer_start('map_read_orig_read')
 
-   !----------------------------------------------------------------------------
-   !> * Open and read the file SCRIP weights size on the root task
-   !----------------------------------------------------------------------------
-   if (OASIS_debug >=2 ) write(nulprt,*) subname," * file name                  : ",trim(fileName)
-   status = nf90_open(trim(filename),NF90_NOWRITE,fid)
-   if (status /= NF90_NOERR) then
-      write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
-      WRITE(nulprt,*) subname,estr,'mapping file not found = ',trim(filename)
-      call oasis_abort()
-   endif
+   if (mytask == 0) then
+      if (OASIS_debug >= 2) write(nulprt,*) subname," reading mapping matrix data decomposed..."
 
-   !--- get matrix dimensions ----------
-!  status = nf90_inq_dimid (fid, 'n_s', did)  ! size of sparse matrix
-   status = nf90_inq_dimid (fid, 'num_links', did)  ! size of sparse matrix
-   status = nf90_inquire_dimension(fid, did  , len = ns)
-!  status = nf90_inq_dimid (fid, 'n_a', did)  ! size of  input vector
-   status = nf90_inq_dimid (fid, 'src_grid_size', did)  ! size of  input vector
-   status = nf90_inquire_dimension(fid, did  , len = na)
-!  status = nf90_inq_dimid (fid, 'n_b', did)  ! size of output vector
-   status = nf90_inq_dimid (fid, 'dst_grid_size', did)  ! size of output vector
-   status = nf90_inquire_dimension(fid, did  , len = nb)
-   status = nf90_inq_dimid (fid, 'num_wgts', did)  ! size of output vector
-   status = nf90_inquire_dimension(fid, did  , len = nwgts)
+      !----------------------------------------------------------------------------
+      !> * Open and read the file SCRIP weights size on the root task
+      !----------------------------------------------------------------------------
+
+      if (OASIS_debug >=2 ) write(nulprt,*) subname," * file name                  : ",trim(fileName)
+      status = nf90_open(trim(filename),NF90_NOWRITE,fid)
+      if (status /= NF90_NOERR) then
+         write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+         write(nulprt,*) subname,estr,'mapping file not found = ',trim(filename)
+         call oasis_abort(file=__FILE__,line=__LINE__)
+      endif
+
+      !--- get matrix dimensions ----------
+!     status = nf90_inq_dimid (fid, 'n_s', did)  ! size of sparse matrix
+      status = nf90_inq_dimid (fid, 'num_links', did)  ! size of sparse matrix
+      if (status /= NF90_NOERR) then
+         write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+         write(nulprt,*) subname,estr,'mapping file not found = ',trim(filename)
+         call oasis_abort(file=__FILE__,line=__LINE__)
+      endif
+      status = nf90_inquire_dimension(fid, did  , len = ns)
+      if (status /= NF90_NOERR) then
+         write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+         call oasis_abort(file=__FILE__,line=__LINE__)
+      endif
+!     status = nf90_inq_dimid (fid, 'n_a', did)  ! size of  input vector
+      status = nf90_inq_dimid (fid, 'src_grid_size', did)  ! size of  input vector
+      if (status /= NF90_NOERR) then
+         write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+         write(nulprt,*) subname,estr,'dim not found = ','src_grid_size'
+         call oasis_abort(file=__FILE__,line=__LINE__)
+      endif
+      status = nf90_inquire_dimension(fid, did  , len = na)
+      if (status /= NF90_NOERR) then
+         write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+         call oasis_abort(file=__FILE__,line=__LINE__)
+      endif
+!     status = nf90_inq_dimid (fid, 'n_b', did)  ! size of output vector
+      status = nf90_inq_dimid (fid, 'dst_grid_size', did)  ! size of output vector
+      if (status /= NF90_NOERR) then
+         write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+         write(nulprt,*) subname,estr,'dim not found = ','dst_grid_size'
+         call oasis_abort(file=__FILE__,line=__LINE__)
+      endif
+      status = nf90_inquire_dimension(fid, did  , len = nb)
+      if (status /= NF90_NOERR) then
+         write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+         call oasis_abort(file=__FILE__,line=__LINE__)
+      endif
+      status = nf90_inq_dimid (fid, 'num_wgts', did)  ! size of output vector
+      if (status /= NF90_NOERR) then
+         write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+         write(nulprt,*) subname,estr,'dim not found = ','num_wgts'
+         call oasis_abort(file=__FILE__,line=__LINE__)
+      endif
+      status = nf90_inquire_dimension(fid, did  , len = nwgts)
+      if (status /= NF90_NOERR) then
+         write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+         call oasis_abort(file=__FILE__,line=__LINE__)
+      endif
    
-   if (present(ni_i) .and. present(nj_i) .and. present(ni_o) .and. present(nj_o)) then
-!     status = nf90_inq_dimid (fid, 'ni_a', did)  ! number of lons in input grid
-!     status = nf90_inquire_dimension(fid, did  , len = ni_i)
-!     status = nf90_inq_dimid (fid, 'nj_a', did)  ! number of lats in input grid
-!     status = nf90_inquire_dimension(fid, did  , len = nj_i)
-!     status = nf90_inq_dimid (fid, 'ni_b', did)  ! number of lons in output grid
-!     status = nf90_inquire_dimension(fid, did  , len = ni_o)
-!     status = nf90_inq_dimid (fid, 'nj_b', did)  ! number of lats in output grid
-!     status = nf90_inquire_dimension(fid, did  , len = nj_o)
-      status = nf90_inq_varid(fid, 'src_grid_dims', vid)
-      status = nf90_get_var(fid, vid, dims)
-      ni_i = dims(1)
-      nj_i = dims(2)
-      status = nf90_inq_varid(fid, 'dst_grid_dims', vid)
-      status = nf90_get_var(fid, vid, dims)
-      ni_o = dims(1)
-      nj_o = dims(2)
-   end if
+      if (present(ni_i) .and. present(nj_i) .and. present(ni_o) .and. present(nj_o)) then
+!        status = nf90_inq_dimid (fid, 'ni_a', did)  ! number of lons in input grid
+!        status = nf90_inquire_dimension(fid, did  , len = ni_i)
+!        status = nf90_inq_dimid (fid, 'nj_a', did)  ! number of lats in input grid
+!        status = nf90_inquire_dimension(fid, did  , len = nj_i)
+!        status = nf90_inq_dimid (fid, 'ni_b', did)  ! number of lons in output grid
+!        status = nf90_inquire_dimension(fid, did  , len = ni_o)
+!        status = nf90_inq_dimid (fid, 'nj_b', did)  ! number of lats in output grid
+!        status = nf90_inquire_dimension(fid, did  , len = nj_o)
+         status = nf90_inq_varid(fid, 'src_grid_dims', vid)
+         if (status /= NF90_NOERR) then
+            write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+            write(nulprt,*) subname,estr,'var not found = ','src_grid_dims'
+            call oasis_abort(file=__FILE__,line=__LINE__)
+         endif
+         status = nf90_get_var(fid, vid, dims)
+         if (status /= NF90_NOERR) then
+            write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+            call oasis_abort(file=__FILE__,line=__LINE__)
+         endif
+         ni_i = dims(1)
+         nj_i = dims(2)
+         status = nf90_inq_varid(fid, 'dst_grid_dims', vid)
+         if (status /= NF90_NOERR) then
+            write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+            write(nulprt,*) subname,estr,'var not found = ','dst_grid_dims'
+            call oasis_abort(file=__FILE__,line=__LINE__)
+         endif
+         status = nf90_get_var(fid, vid, dims)
+         if (status /= NF90_NOERR) then
+            write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+            call oasis_abort(file=__FILE__,line=__LINE__)
+         endif
+         ni_o = dims(1)
+         nj_o = dims(2)
+      end if
 
-   if (OASIS_debug >= 2) write(nulprt,*) subname," * matrix dims src x dst      : ",na,' x',nb
-   if (OASIS_debug >= 2) write(nulprt,*) subname," * number of non-zero elements: ",ns
+      if (OASIS_debug >= 2) write(nulprt,*) subname," * matrix dims src x dst      : ",na,' x',nb
+      if (OASIS_debug >= 2) write(nulprt,*) subname," * number of non-zero elements: ",ns
 
- endif
+   endif
  
    !----------------------------------------------------------------------------
    !> * Read and load area_a on root task
    !----------------------------------------------------------------------------
+
    if (present(areasrc)) then
    if (mytask == 0) then
       call mct_aVect_init(areasrc0,' ',areaAV_field,na)
 !     status = nf90_inq_varid     (fid,'area_a',vid)
       status = nf90_inq_varid     (fid,'src_grid_area',vid)
-      IF (status /= NF90_NOERR) THEN
-          WRITE(nulprt,*) subname,' nf90_strerrr = ',TRIM(nf90_strerror(status))
-          WRITE(nulprt,*) subname,'model :',compid,' proc :',mpi_rank_local
-          CALL oasis_flush(nulprt)
-      ENDIF
+      if (status /= NF90_NOERR) THEN
+         write(nulprt,*) subname,' nf90_strerrr = ',TRIM(nf90_strerror(status))
+         write(nulprt,*) subname,estr,'var not found = ','src_grid_area'
+         call oasis_flush(nulprt)
+      endif
       status = nf90_get_var(fid, vid, areasrc0%rAttr)
-      IF (status /= NF90_NOERR) THEN
-          WRITE(nulprt,*) subname,' nf90_strerror = ',TRIM(nf90_strerror(status))
-          WRITE(nulprt,*) subname,'model :',compid,' proc :',mpi_rank_local
-          CALL oasis_flush(nulprt)
-      ENDIF
+      if (status /= NF90_NOERR) THEN
+         write(nulprt,*) subname,' nf90_strerror = ',TRIM(nf90_strerror(status))
+         call oasis_flush(nulprt)
+      endif
    endif
    call mct_aVect_scatter(areasrc0, areasrc, SgsMap, 0, mpicom, status)
    if (status /= 0) call mct_die(subname,"Error on scatter of areasrc0")
@@ -552,22 +659,22 @@ subroutine oasis_map_sMatReaddnc_orig(sMat,SgsMap,DgsMap,newdom, &
    !----------------------------------------------------------------------------
    !> * Read and load area_b on root task
    !----------------------------------------------------------------------------
+
    if (present(areadst)) then
    if (mytask == 0) then
       call mct_aVect_init(areadst0,' ',areaAV_field,nb)
 !     status = nf90_inq_varid     (fid,'area_b',vid)
       status = nf90_inq_varid     (fid,'dst_grid_area',vid)
-      IF (status /= NF90_NOERR) THEN
-          WRITE(nulprt,*) subname,' nf90_strerror = ',TRIM(nf90_strerror(status))
-          WRITE(nulprt,*) subname,'model :',compid,' proc :',mpi_rank_local
-          CALL oasis_flush(nulprt)
-      ENDIF
+      if (status /= NF90_NOERR) THEN
+         write(nulprt,*) subname,' nf90_strerror = ',TRIM(nf90_strerror(status))
+         write(nulprt,*) subname,estr,'var not found = ','dst_grid_area'
+         call oasis_flush(nulprt)
+      endif
       status = nf90_get_var(fid, vid, areadst0%rAttr)
-      IF (status /= NF90_NOERR) THEN
-          WRITE(nulprt,*) subname,' nf90_strerror = ',TRIM(nf90_strerror(status))
-          WRITE(nulprt,*) subname,'model :',compid,' proc :',mpi_rank_local
-          CALL oasis_flush(nulprt)
-      ENDIF
+      if (status /= NF90_NOERR) THEN
+         write(nulprt,*) subname,' nf90_strerror = ',TRIM(nf90_strerror(status))
+         call oasis_flush(nulprt)
+      endif
    endif
    call mct_aVect_scatter(areadst0, areadst, DgsMap, 0, mpicom, status)
    if (status /= 0) call mct_die(subname,"Error on scatter of areadst0")
@@ -585,6 +692,7 @@ subroutine oasis_map_sMatReaddnc_orig(sMat,SgsMap,DgsMap,newdom, &
    !----------------------------------------------------------------------------
    !> * Broadcast ni and nj if requested
    !----------------------------------------------------------------------------
+
    if (present(ni_i) .and. present(nj_i) .and. present(ni_o) .and. present(nj_o)) then
       call oasis_mpi_bcast(ni_i,mpicom,subName//" MPI in ni_i bcast")
       call oasis_mpi_bcast(nj_i,mpicom,subName//" MPI in nj_i bcast")
@@ -595,11 +703,14 @@ subroutine oasis_map_sMatReaddnc_orig(sMat,SgsMap,DgsMap,newdom, &
    !----------------------------------------------------------------------------
    !> * Broadcast array sizes and allocate arrays for local storage
    !----------------------------------------------------------------------------
+
    call oasis_mpi_bcast(ns,mpicom,subName//" MPI in ns bcast")
    call oasis_mpi_bcast(na,mpicom,subName//" MPI in na bcast")
    call oasis_mpi_bcast(nb,mpicom,subName//" MPI in nb bcast")
    call oasis_mpi_bcast(nwgts,mpicom,subName//" MPI in nwgts bcast")
+   if (local_timers_on) call oasis_timer_stop('map_read_orig_read')
 
+   if (local_timers_on) call oasis_timer_start('map_read_orig_sort')
    !--- setup local seg map, sorted
    if (newdom == 'src') then
       mygsmap => DgsMap
@@ -607,7 +718,7 @@ subroutine oasis_map_sMatReaddnc_orig(sMat,SgsMap,DgsMap,newdom, &
       mygsmap => SgsMap
    else
       write(nulprt,*) subname,estr,'invalid newdom value, expect src or dst = ',newdom
-      call oasis_abort()
+      call oasis_abort(file=__FILE__,line=__LINE__)
    endif
    lsize = 0
    do n = 1,size(mygsmap%start)
@@ -621,6 +732,7 @@ subroutine oasis_map_sMatReaddnc_orig(sMat,SgsMap,DgsMap,newdom, &
    !----------------------------------------------------------------------------
    !> * Initialize lsstart and lscount, the sorted list of local indices
    !----------------------------------------------------------------------------
+
    lsize = 0
    do n = 1,size(mygsmap%start)
       if (mygsmap%pe_loc(n) == mytask) then  ! on my pe
@@ -645,13 +757,16 @@ subroutine oasis_map_sMatReaddnc_orig(sMat,SgsMap,DgsMap,newdom, &
    do n = 1,lsize-1
       if (lsstart(n) > lsstart(n+1)) then
          write(nulprt,*) subname,estr,'lsstart not properly sorted'
-         call oasis_abort()
+         call oasis_abort(file=__FILE__,line=__LINE__)
       endif
    enddo
+   if (local_timers_on) call oasis_timer_stop('map_read_orig_sort')
 
    !----------------------------------------------------------------------------
    !> * Compute the number of chunks to read, read size is rbuf_size
    !----------------------------------------------------------------------------
+
+   if (local_timers_on) call oasis_timer_start('map_read_orig_dist')
    rsize = min(rbuf_size,ns)                     ! size of i/o chunks
    bsize = ((ns/commsize) + 1 ) * 1.2   ! local temporary buffer size
    if (ns == 0) then
@@ -663,6 +778,7 @@ subroutine oasis_map_sMatReaddnc_orig(sMat,SgsMap,DgsMap,newdom, &
    !----------------------------------------------------------------------------
    !> * Allocate arrays for local weights plus row and column indices
    !----------------------------------------------------------------------------
+
    if (mytask == 0) then
       allocate(remaps(nwgts,rsize),stat=status)
       if (status /= 0) call mct_perr_die(subName,':: allocate remaps',status)
@@ -677,6 +793,7 @@ subroutine oasis_map_sMatReaddnc_orig(sMat,SgsMap,DgsMap,newdom, &
    !----------------------------------------------------------------------------
    !> * Loop over the chunks of weights data
    !----------------------------------------------------------------------------
+
    cnt = 0
    do n = 1,nread
       start(1) = (n-1)*rsize + 1
@@ -689,35 +806,48 @@ subroutine oasis_map_sMatReaddnc_orig(sMat,SgsMap,DgsMap,newdom, &
       !----------------------------------------------------------------------------
       !>   * Read chunk of data on root pe
       !----------------------------------------------------------------------------
+
       if (mytask== 0) then
 !        status = nf90_inq_varid      (fid,'S'  ,vid)
          status = nf90_inq_varid      (fid,'remap_matrix'  ,vid)
+         if (status /= NF90_NOERR) then
+            write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+            write(nulprt,*) subname,estr,'var not found = ','remap_matrix'
+            call oasis_abort(file=__FILE__,line=__LINE__)
+         endif
 !        status = nf90_get_var(fid,vid,start,count,Sbuf)
          status = nf90_get_var(fid,vid,remaps,start2,count2)
+         if (status /= NF90_NOERR) THEN
+            write(nulprt,*) subname,' nf90_strerror = ',TRIM(nf90_strerror(status))
+            call oasis_flush(nulprt)
+         endif
          Sbuf(:,:) = remaps(:,:)
-         IF (status /= NF90_NOERR) THEN
-             WRITE(nulprt,*) subname,' nf90_strerror = ',TRIM(nf90_strerror(status))
-             WRITE(nulprt,*) subname,'model :',compid,' proc :',mpi_rank_local
-             CALL oasis_flush(nulprt)
-         ENDIF
 
 !        status = nf90_inq_varid      (fid,'row',vid)
          status = nf90_inq_varid      (fid,'dst_address',vid)
+         if (status /= NF90_NOERR) then
+            write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+            write(nulprt,*) subname,estr,'var not found = ','dst_address'
+            call oasis_abort(file=__FILE__,line=__LINE__)
+         endif
          status = nf90_get_var   (fid,vid,Rbuf,start,count)
-         IF (status /= NF90_NOERR) THEN
-             WRITE(nulprt,*) subname,' nf90_strerror = ',TRIM(nf90_strerror(status))
-             WRITE(nulprt,*) subname,'model :',compid,' proc :',mpi_rank_local
-             CALL oasis_flush(nulprt)
-         ENDIF
+         if (status /= NF90_NOERR) THEN
+            write(nulprt,*) subname,' nf90_strerror = ',TRIM(nf90_strerror(status))
+            call oasis_flush(nulprt)
+         endif
 
 !        status = nf90_inq_varid      (fid,'col',vid)
          status = nf90_inq_varid      (fid,'src_address',vid)
+         if (status /= NF90_NOERR) then
+            write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+            write(nulprt,*) subname,estr,'var not found = ','src_address'
+            call oasis_abort(file=__FILE__,line=__LINE__)
+         endif
          status = nf90_get_var   (fid,vid,Cbuf,start,count)
-         IF (status /= NF90_NOERR) THEN
-             WRITE(nulprt,*) subname,' nf90_strerror = ',TRIM(nf90_strerror(status))
-             WRITE(nulprt,*) subname,'model :',compid,' proc :',mpi_rank_local
-             CALL oasis_flush(nulprt)
-         ENDIF
+         if (status /= NF90_NOERR) THEN
+            write(nulprt,*) subname,' nf90_strerror = ',TRIM(nf90_strerror(status))
+            call oasis_flush(nulprt)
+         endif
       endif
  
       !----------------------------------------------------------------------------
@@ -731,9 +861,43 @@ subroutine oasis_map_sMatReaddnc_orig(sMat,SgsMap,DgsMap,newdom, &
       !----------------------------------------------------------------------------
       !>   * Each task keeps only the data required
       !----------------------------------------------------------------------------
+
+      if (namwgtopt == "abort_on_bad_index") then
+         abort_weight = .false.
+         do m = 1,count(1)
+            !--- check for bad weights
+            if ((Rbuf(m) <= 0 .or. Rbuf(m) > nb .or. &
+                 Cbuf(m) <= 0 .or. Cbuf(m) > na) &
+! tcx weight = 0
+                .and. (minval(Sbuf(:,m)) /= 0._R8 .or. maxval(Sbuf(:,m)) /= 0._R8) &
+               ) then
+               abort_weight = .true.
+               write(nulprt,'(3A,I12,A,I12,A,I12,A,G14.7,A,G14.7,A)') &
+                  subname,wstr,'BAD weight found in '//trim(filename), &
+                  m,'=id',Cbuf(m),'=src',Rbuf(m),'=dst',minval(Sbuf(:,m)),'=minS',maxval(Sbuf(:,m)),'=maxS'
+            endif
+         enddo
+         if (abort_weight) then
+            write(nulprt,*) subname,wstr,'BAD weight found, aborting'
+            call oasis_abort(file=__FILE__,line=__LINE__)
+         endif
+      endif
+
       do m = 1,count(1)
-         !--- should this weight be on my pe
-         if (newdom == 'src') then
+         !--- check for bad weights
+         if ((namwgtopt(1:16) == "ignore_bad_index") .and. &
+             (Rbuf(m) <= 0 .or. Rbuf(m) > nb .or. &
+              Cbuf(m) <= 0 .or. Cbuf(m) > na)) then
+            mywt = .false.
+! tcx weight = 0
+            if (minval(Sbuf(:,m)) /= 0._R8 .or. maxval(Sbuf(:,m)) /= 0._R8) then
+               if (OASIS_debug >= 2 .and. namwgtopt /= "ignore_bad_index_silently") then
+                  write(nulprt,'(3A,I12,A,I12,A,I12,A,G14.7,A,G14.7,A)') &
+                     subname,wstr,'BAD weight found in '//trim(filename), &
+                     m,'=id',Cbuf(m),'=src',Rbuf(m),'=dst',minval(Sbuf(:,m)),'=minS',maxval(Sbuf(:,m)),'=maxS'
+               endif
+            endif
+         elseif (newdom == 'src') then
             mywt = check_myindex(Rbuf(m),lsstart,lscount)
          elseif (newdom == 'dst') then
             mywt = check_myindex(Cbuf(m),lsstart,lscount)
@@ -780,16 +944,20 @@ subroutine oasis_map_sMatReaddnc_orig(sMat,SgsMap,DgsMap,newdom, &
    !----------------------------------------------------------------------------
    !> * Clean up arrays
    !----------------------------------------------------------------------------
+
    if (mytask == 0) then
       deallocate(remaps, stat=status)
       if (status /= 0) call mct_perr_die(subName,':: deallocate remaps',status)
    endif
    deallocate(Sbuf,Rbuf,Cbuf, stat=status)
    if (status /= 0) call mct_perr_die(subName,':: deallocate Sbuf',status)
+   if (local_timers_on) call oasis_timer_stop('map_read_orig_dist')
 
    !----------------------------------------------------------------------------
    !> * Initialize the mct sMat data type
    !----------------------------------------------------------------------------
+
+   if (local_timers_on) call oasis_timer_start('map_read_orig_smati')
    ! mct_sMat_init must be given the number of rows and columns that
    ! would be in the full matrix.  Nrows= size of output vector=nb.
    ! Ncols = size of input vector = na.
@@ -808,103 +976,33 @@ subroutine oasis_map_sMatReaddnc_orig(sMat,SgsMap,DgsMap,newdom, &
       sMat(n)%data%iAttr(igcol,1:cnt) = Cnew(1:cnt)
    enddo
    endif
+   if (local_timers_on) call oasis_timer_stop('map_read_orig_smati')
 
    !----------------------------------------------------------------------------
    !> * More clean up
    !----------------------------------------------------------------------------
+
+   if (local_timers_on) call oasis_timer_start('map_read_orig_clean')
    deallocate(Snew,Rnew,Cnew, stat=status)
    deallocate(lsstart,lscount,stat=status)
    if (status /= 0) call mct_perr_die(subName,':: deallocate new',status)
 
    if (mytask == 0) then
       status = nf90_close(fid)
-      IF (OASIS_debug >= 2) THEN
-          WRITE(nulprt,*) subname," ... done reading file"
-          CALL oasis_flush(nulprt)
-      ENDIF
+      if (status /= NF90_NOERR) then
+         write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+         call oasis_abort(file=__FILE__,line=__LINE__)
+      endif
+      if (OASIS_debug >= 2) THEN
+         write(nulprt,*) subname," ... done reading file"
+         call oasis_flush(nulprt)
+      endif
    endif
+   if (local_timers_on) call oasis_timer_stop('map_read_orig_clean')
 
-  call oasis_debug_exit(subname)
+   call oasis_debug_exit(subname)
 
 end subroutine oasis_map_sMatReaddnc_orig
-
-!------------------------------------------------------------
-! !BOP ===========================================================================
-!
-!> Function that checks whether an index is part of a start and count list
-!
-!> Does a binary search on a sorted start and count list to determine
-!> whether index is a value in the list.  The list values consist of
-!> the values start(i):start(i)+count(i)-1 for all i.
-!
-! !DESCRIPTION: 
-!     Do a binary search to see if a value is contained in a list of
-!     values.  return true or false.  starti must be monotonically
-!     increasing, function does NOT check this.
-!
-! !INTERFACE:  -----------------------------------------------------------------
-
-logical function check_myindex(index,starti,counti)
-
-! !USES:
-
-   !--- local kinds ---
-   integer,parameter :: R8 = ip_double_p
-   integer,parameter :: IN = ip_i4_p
-
-! !INPUT/OUTPUT PARAMETERS:
-
-   integer(IN) :: index       !< index to search
-   integer(IN) :: starti(:)   !< start list
-   integer(IN) :: counti(:)   !< count list
-
-! !EOP
-
-   !--- local ---
-   integer(IN)    :: nl,nc,nr,ncprev 
-   integer(IN)    :: lsize
-   logical        :: stopnow
-
-   !--- formats ---
-   character(*),parameter :: subName = '(check_myindex) '
-
-!-------------------------------------------------------------------------------
-!
-!-------------------------------------------------------------------------------
-
-!   call oasis_debug_enter(subname)
-   check_myindex = .false.
-
-   lsize = size(starti)
-   if (lsize < 1) then
-!     call oasis_debug_exit(subname)
-      return
-   endif
-
-   nl = 0
-   nr = lsize + 1
-   nc = (nl+nr)/2
-   stopnow = .false.
-   do while (.not.stopnow)
-      if (index < starti(nc)) then
-         nr = nc
-      elseif (index > (starti(nc) + counti(nc) - 1)) then
-         nl = nc
-      else
-         check_myindex = .true.
-!        call oasis_debug_exit(subname)
-         return
-      endif
-      ncprev = nc
-      nc = (nl + nr)/2
-      if (nc == ncprev .or. nc < 1 .or. nc > lsize) stopnow = .true.
-   enddo
-
-   check_myindex = .false.
-
-!   call oasis_debug_exit(subname)
-
-end function check_myindex
 
 !===============================================================================
 !BOP ===========================================================================
@@ -986,6 +1084,7 @@ subroutine oasis_map_sMatReaddnc_ceg(sMat,SgsMap,DgsMap,newdom, &
    integer           :: nread   ! number of reads 
    logical           :: mywt    ! does this weight belong on my pe
    integer           :: dims(2) 
+   logical           :: abort_weight ! flag if bad weight found
 
    !--- buffers for i/o ---
    real(R8)   ,allocatable :: rtemp(:) ! real temporary
@@ -1008,6 +1107,7 @@ subroutine oasis_map_sMatReaddnc_ceg(sMat,SgsMap,DgsMap,newdom, &
    integer,allocatable :: lsstart(:)  ! local seg map info
    integer,allocatable :: lscount(:)  ! local seg map info
    integer,allocatable :: lspeloc(:)  ! local seg map info
+   integer,allocatable :: sortkey(:)  ! local sort key info
    logical             :: found       ! for sort
    integer             :: pe          ! Process ID of owning process
    integer             :: reclen      ! Length of Rbuf/Cbuf to be received
@@ -1039,79 +1139,136 @@ subroutine oasis_map_sMatReaddnc_ceg(sMat,SgsMap,DgsMap,newdom, &
 !
 !-------------------------------------------------------------------------------
 
- call oasis_debug_enter(subname)
- call oasis_mpi_commsize(mpicom,commsize)
- nwgts = -1
- if (mytask == 0) then
-   if (OASIS_debug >= 2) write(nulprt,*) subname," reading mapping matrix data decomposed..."
+   call oasis_debug_enter(subname)
+   call oasis_mpi_commsize(mpicom,commsize)
+   nwgts = -1
+   if (local_timers_on) call oasis_timer_start('map_read_ceg_read')
 
-   !----------------------------------------------------------------------------
-   !> * Open and read the file SCRIP weights size on the root task
-   !----------------------------------------------------------------------------
-   if (OASIS_debug >=2 ) write(nulprt,*) subname," * file name                  : ",trim(fileName)
-   status = nf90_open(trim(filename),NF90_NOWRITE,fid)
-   if (status /= NF90_NOERR) then
-      write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
-      WRITE(nulprt,*) subname,estr,'mapping file not found = ',trim(filename)
-      call oasis_abort()
-   endif
+   if (mytask == 0) then
+      if (OASIS_debug >= 2) write(nulprt,*) subname," reading mapping matrix data decomposed..."
 
-   !--- get matrix dimensions ----------
-!  status = nf90_inq_dimid (fid, 'n_s', did)  ! size of sparse matrix
-   status = nf90_inq_dimid (fid, 'num_links', did)  ! size of sparse matrix
-   status = nf90_inquire_dimension(fid, did  , len = ns)
-!  status = nf90_inq_dimid (fid, 'n_a', did)  ! size of  input vector
-   status = nf90_inq_dimid (fid, 'src_grid_size', did)  ! size of  input vector
-   status = nf90_inquire_dimension(fid, did  , len = na)
-!  status = nf90_inq_dimid (fid, 'n_b', did)  ! size of output vector
-   status = nf90_inq_dimid (fid, 'dst_grid_size', did)  ! size of output vector
-   status = nf90_inquire_dimension(fid, did  , len = nb)
-   status = nf90_inq_dimid (fid, 'num_wgts', did)  ! size of output vector
-   status = nf90_inquire_dimension(fid, did  , len = nwgts)
+      !----------------------------------------------------------------------------
+      !> * Open and read the file SCRIP weights size on the root task
+      !----------------------------------------------------------------------------
+
+      if (OASIS_debug >=2 ) write(nulprt,*) subname," * file name                  : ",trim(fileName)
+      status = nf90_open(trim(filename),NF90_NOWRITE,fid)
+      if (status /= NF90_NOERR) then
+         write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+         write(nulprt,*) subname,estr,'mapping file not found = ',trim(filename)
+         call oasis_abort(file=__FILE__,line=__LINE__)
+      endif
+
+      !--- get matrix dimensions ----------
+!     status = nf90_inq_dimid (fid, 'n_s', did)  ! size of sparse matrix
+      status = nf90_inq_dimid (fid, 'num_links', did)  ! size of sparse matrix
+      if (status /= NF90_NOERR) then
+         write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+         write(nulprt,*) subname,estr,'dim not found = ','num_links'
+         call oasis_abort(file=__FILE__,line=__LINE__)
+      endif
+      status = nf90_inquire_dimension(fid, did  , len = ns)
+      if (status /= NF90_NOERR) then
+         write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+         call oasis_abort(file=__FILE__,line=__LINE__)
+      endif
+!     status = nf90_inq_dimid (fid, 'n_a', did)  ! size of  input vector
+      status = nf90_inq_dimid (fid, 'src_grid_size', did)  ! size of  input vector
+      if (status /= NF90_NOERR) then
+         write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+         write(nulprt,*) subname,estr,'dim not found = ','src_grid_size'
+         call oasis_abort(file=__FILE__,line=__LINE__)
+      endif
+      status = nf90_inquire_dimension(fid, did  , len = na)
+      if (status /= NF90_NOERR) then
+         write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+         call oasis_abort(file=__FILE__,line=__LINE__)
+      endif
+!     status = nf90_inq_dimid (fid, 'n_b', did)  ! size of output vector
+      status = nf90_inq_dimid (fid, 'dst_grid_size', did)  ! size of output vector
+      if (status /= NF90_NOERR) then
+         write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+         write(nulprt,*) subname,estr,'dim not found = ','dst_grid_size'
+         call oasis_abort(file=__FILE__,line=__LINE__)
+      endif
+      status = nf90_inquire_dimension(fid, did  , len = nb)
+      if (status /= NF90_NOERR) then
+         write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+         call oasis_abort(file=__FILE__,line=__LINE__)
+      endif
+      status = nf90_inq_dimid (fid, 'num_wgts', did)  ! size of output vector
+      if (status /= NF90_NOERR) then
+         write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+         write(nulprt,*) subname,estr,'dim not found = ','num_wgts'
+         call oasis_abort(file=__FILE__,line=__LINE__)
+      endif
+      status = nf90_inquire_dimension(fid, did  , len = nwgts)
+      if (status /= NF90_NOERR) then
+         write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+         call oasis_abort(file=__FILE__,line=__LINE__)
+      endif
    
-   if (present(ni_i) .and. present(nj_i) .and. present(ni_o) .and. present(nj_o)) then
-!     status = nf90_inq_dimid (fid, 'ni_a', did)  ! number of lons in input grid
-!     status = nf90_inquire_dimension(fid, did  , len = ni_i)
-!     status = nf90_inq_dimid (fid, 'nj_a', did)  ! number of lats in input grid
-!     status = nf90_inquire_dimension(fid, did  , len = nj_i)
-!     status = nf90_inq_dimid (fid, 'ni_b', did)  ! number of lons in output grid
-!     status = nf90_inquire_dimension(fid, did  , len = ni_o)
-!     status = nf90_inq_dimid (fid, 'nj_b', did)  ! number of lats in output grid
-!     status = nf90_inquire_dimension(fid, did  , len = nj_o)
-      status = nf90_inq_varid(fid, 'src_grid_dims', vid)
-      status = nf90_get_var(fid, vid, dims)
-      ni_i = dims(1)
-      nj_i = dims(2)
-      status = nf90_inq_varid(fid, 'dst_grid_dims', vid)
-      status = nf90_get_var(fid, vid, dims)
-      ni_o = dims(1)
-      nj_o = dims(2)
-   end if
+      if (present(ni_i) .and. present(nj_i) .and. present(ni_o) .and. present(nj_o)) then
+!        status = nf90_inq_dimid (fid, 'ni_a', did)  ! number of lons in input grid
+!        status = nf90_inquire_dimension(fid, did  , len = ni_i)
+!        status = nf90_inq_dimid (fid, 'nj_a', did)  ! number of lats in input grid
+!        status = nf90_inquire_dimension(fid, did  , len = nj_i)
+!        status = nf90_inq_dimid (fid, 'ni_b', did)  ! number of lons in output grid
+!        status = nf90_inquire_dimension(fid, did  , len = ni_o)
+!        status = nf90_inq_dimid (fid, 'nj_b', did)  ! number of lats in output grid
+!        status = nf90_inquire_dimension(fid, did  , len = nj_o)
+         status = nf90_inq_varid(fid, 'src_grid_dims', vid)
+         if (status /= NF90_NOERR) then
+            write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+            write(nulprt,*) subname,estr,'var not found = ','src_grid_dims'
+            call oasis_abort(file=__FILE__,line=__LINE__)
+         endif
+         status = nf90_get_var(fid, vid, dims)
+         if (status /= NF90_NOERR) then
+            write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+            call oasis_abort(file=__FILE__,line=__LINE__)
+         endif
+         ni_i = dims(1)
+         nj_i = dims(2)
+         status = nf90_inq_varid(fid, 'dst_grid_dims', vid)
+         if (status /= NF90_NOERR) then
+            write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+            write(nulprt,*) subname,estr,'var not found = ','dst_grid_dims'
+            call oasis_abort(file=__FILE__,line=__LINE__)
+         endif
+         status = nf90_get_var(fid, vid, dims)
+         if (status /= NF90_NOERR) then
+            write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+            call oasis_abort(file=__FILE__,line=__LINE__)
+         endif
+         ni_o = dims(1)
+         nj_o = dims(2)
+      end if
 
-   if (OASIS_debug >= 2) write(nulprt,*) subname," * matrix dims src x dst      : ",na,' x',nb
-   if (OASIS_debug >= 2) write(nulprt,*) subname," * number of non-zero elements: ",ns
+      if (OASIS_debug >= 2) write(nulprt,*) subname," * matrix dims src x dst      : ",na,' x',nb
+      if (OASIS_debug >= 2) write(nulprt,*) subname," * number of non-zero elements: ",ns
 
- endif
+   endif
  
    !----------------------------------------------------------------------------
    !> * Read and load area_a on root task
    !----------------------------------------------------------------------------
+
    if (present(areasrc)) then
    if (mytask == 0) then
       call mct_aVect_init(areasrc0,' ',areaAV_field,na)
 !     status = nf90_inq_varid     (fid,'area_a',vid)
       status = nf90_inq_varid     (fid,'src_grid_area',vid)
-      IF (status /= NF90_NOERR) THEN
-          WRITE(nulprt,*) subname,' nf90_strerrr = ',TRIM(nf90_strerror(status))
-          WRITE(nulprt,*) subname,'model :',compid,' proc :',mpi_rank_local
-          CALL oasis_flush(nulprt)
-      ENDIF
+      if (status /= NF90_NOERR) THEN
+         write(nulprt,*) subname,' nf90_strerrr = ',TRIM(nf90_strerror(status))
+         write(nulprt,*) subname,estr,'var not found = ','src_grid_area'
+         call oasis_flush(nulprt)
+      endif
       status = nf90_get_var(fid, vid, areasrc0%rAttr)
-      IF (status /= NF90_NOERR) THEN
-          WRITE(nulprt,*) subname,' nf90_strerror = ',TRIM(nf90_strerror(status))
-          WRITE(nulprt,*) subname,'model :',compid,' proc :',mpi_rank_local
-          CALL oasis_flush(nulprt)
-      ENDIF
+      if (status /= NF90_NOERR) THEN
+         write(nulprt,*) subname,' nf90_strerror = ',TRIM(nf90_strerror(status))
+         call oasis_flush(nulprt)
+      endif
    endif
    call mct_aVect_scatter(areasrc0, areasrc, SgsMap, 0, mpicom, status)
    if (status /= 0) call mct_die(subname,"Error on scatter of areasrc0")
@@ -1128,22 +1285,22 @@ subroutine oasis_map_sMatReaddnc_ceg(sMat,SgsMap,DgsMap,newdom, &
    !----------------------------------------------------------------------------
    !> * Read and load area_b on root task
    !----------------------------------------------------------------------------
+
    if (present(areadst)) then
    if (mytask == 0) then
       call mct_aVect_init(areadst0,' ',areaAV_field,nb)
 !     status = nf90_inq_varid     (fid,'area_b',vid)
       status = nf90_inq_varid     (fid,'dst_grid_area',vid)
-      IF (status /= NF90_NOERR) THEN
-          WRITE(nulprt,*) subname,' nf90_strerror = ',TRIM(nf90_strerror(status))
-          WRITE(nulprt,*) subname,'model :',compid,' proc :',mpi_rank_local
-          CALL oasis_flush(nulprt)
-      ENDIF
+      if (status /= NF90_NOERR) THEN
+         write(nulprt,*) subname,' nf90_strerror = ',TRIM(nf90_strerror(status))
+         write(nulprt,*) subname,estr,'var not found = ','dst_grid_area'
+         call oasis_flush(nulprt)
+      endif
       status = nf90_get_var(fid, vid, areadst0%rAttr)
-      IF (status /= NF90_NOERR) THEN
-          WRITE(nulprt,*) subname,' nf90_strerror = ',TRIM(nf90_strerror(status))
-          WRITE(nulprt,*) subname,'model :',compid,' proc :',mpi_rank_local
-          CALL oasis_flush(nulprt)
-      ENDIF
+      if (status /= NF90_NOERR) THEN
+         write(nulprt,*) subname,' nf90_strerror = ',TRIM(nf90_strerror(status))
+         call oasis_flush(nulprt)
+      endif
    endif
    call mct_aVect_scatter(areadst0, areadst, DgsMap, 0, mpicom, status)
    if (status /= 0) call mct_die(subname,"Error on scatter of areadst0")
@@ -1162,6 +1319,7 @@ subroutine oasis_map_sMatReaddnc_ceg(sMat,SgsMap,DgsMap,newdom, &
    !> * Broadcast array sizes and allocate arrays for local storage
    ! Replace 8 MPI_Bcasts with just one
    !----------------------------------------------------------------------------
+
    if (mpi_rank_local.eq.0) then
       dimbuffer(1) = ns
       dimbuffer(2) = na
@@ -1200,12 +1358,13 @@ subroutine oasis_map_sMatReaddnc_ceg(sMat,SgsMap,DgsMap,newdom, &
       mygsmap => SgsMap
    else
       write(nulprt,*) subname,estr,'invalid newdom value, expect src or dst = ',newdom
-      call oasis_abort()
+      call oasis_abort(file=__FILE__,line=__LINE__)
    endif
 
    !----------------------------------------------------------------------------
    !> * Compute the number of chunks to read, read size is rbuf_size
    !----------------------------------------------------------------------------
+
    rsize = min(rbuf_size,ns)                     ! size of i/o chunks
    bsize = ((ns/commsize) + 1 ) * 1.2   ! local temporary buffer size
    if (ns == 0) then
@@ -1217,6 +1376,7 @@ subroutine oasis_map_sMatReaddnc_ceg(sMat,SgsMap,DgsMap,newdom, &
    !----------------------------------------------------------------------------
    !> * Allocate arrays for local weights plus row and column indices
    !----------------------------------------------------------------------------
+
    allocate(Smat(nwgts),stat=status)
    if (status /= 0) call mct_perr_die(subName,':: allocate Smat',status)
    allocate(Sbuf(nwgts,rsize),Rbuf(rsize),Cbuf(rsize),stat=status)
@@ -1226,48 +1386,74 @@ subroutine oasis_map_sMatReaddnc_ceg(sMat,SgsMap,DgsMap,newdom, &
 !   write(nulprt,*) subname,mpi_rank_local,rsize,rsize*nwgts
 
    cnt = 1
+   if (local_timers_on) call oasis_timer_stop('map_read_ceg_read')
 
    !----------------------------------------------------------------------------
    !> * On the root task
    !----------------------------------------------------------------------------
+
    if (mytask == 0) then
 
       !----------------------------------------------------------------------------
-      !>   * Initialize lsstart and lscount, the sorted list of local indices
+      !>   * Initialize lsstart, lscount, and lspeloc, the sorted list of local indices
+      !>   * Sort via bubble sort or merge sort depending on size of array
       !----------------------------------------------------------------------------
+
+      if (local_timers_on) call oasis_timer_start('map_read_ceg_sort')
       lsize = size(mygsmap%start)
       allocate(lsstart(lsize),lscount(lsize),lspeloc(lsize),stat=status)
       if (status /= 0) call mct_perr_die(subName,':: allocate Lsstart',status)
 
-      do n = 1,size(mygsmap%start)
-         found = .false.
-         l1 = 1
-         do while (.not.found .and. l1 < n)         ! bubble sort copy
-            if (mygsmap%start(n) < lsstart(l1)) then
-               do l2 = n, l1+1, -1
-                  lsstart(l2) = lsstart(l2-1)
-                  lscount(l2) = lscount(l2-1)
-                  lspeloc(l2) = lspeloc(l2-1)
-               enddo
-               found = .true.
-            else
-               l1 = l1 + 1
-            endif
+      if (lsize > 10) then
+         ! merge sort
+         allocate(sortkey(lsize),stat=status)
+         if (status /= 0) call mct_perr_die(subName,':: allocate sortkey',status)
+         do n = 1,lsize
+            lsstart(n) = mygsmap%start(n)
+            lscount(n) = mygsmap%length(n)
+            lspeloc(n) = mygsmap%pe_loc(n)
+            sortkey(n) = n
          enddo
-         lsstart(l1) = mygsmap%start(n)
-         lscount(l1) = mygsmap%length(n)
-         lspeloc(l1) = mygsmap%pe_loc(n)
-      enddo
+         call oasis_sys_sortI(lsize,lsstart,sortkey)
+         call oasis_sys_sortIkey(lsize,lscount,sortkey)
+         call oasis_sys_sortIkey(lsize,lspeloc,sortkey)
+         deallocate(sortkey)
+      else
+         ! bubble sort
+         do n = 1,lsize
+            found = .false.
+            l1 = 1
+            do while (.not.found .and. l1 < n)
+               if (mygsmap%start(n) < lsstart(l1)) then
+                  do l2 = n, l1+1, -1
+                     lsstart(l2) = lsstart(l2-1)
+                     lscount(l2) = lscount(l2-1)
+                     lspeloc(l2) = lspeloc(l2-1)
+                  enddo
+                  found = .true.
+               else
+                  l1 = l1 + 1
+               endif
+            enddo
+            lsstart(l1) = mygsmap%start(n)
+            lscount(l1) = mygsmap%length(n)
+            lspeloc(l1) = mygsmap%pe_loc(n)
+         enddo
+      endif
+
       do n = 1,size(mygsmap%start)-1
          if (lsstart(n) > lsstart(n+1)) then
             write(nulprt,*) subname,estr,'lsstart not properly sorted'
-            call oasis_abort()
+            call oasis_abort(file=__FILE__,line=__LINE__)
          endif
       enddo
+      if (local_timers_on) call oasis_timer_stop('map_read_ceg_sort')
+      if (local_timers_on) call oasis_timer_start('map_read_ceg_dist')
 
       !----------------------------------------------------------------------------
       !>   * Allocate arrays for reading data on the root
       !----------------------------------------------------------------------------
+
       allocate(remaps(nwgts,rsize),stat=status)
       if (status /= 0) call mct_perr_die(subName,':: allocate remaps',status)
       allocate(SReadData(nwgts,rsize),RReadData(rsize),CReadData(rsize),stat=status)
@@ -1282,6 +1468,7 @@ subroutine oasis_map_sMatReaddnc_ceg(sMat,SgsMap,DgsMap,newdom, &
       !----------------------------------------------------------------------------
       !>   * Loop over the chunks of weights data
       !----------------------------------------------------------------------------
+
       do n = 1,nread
          start(1) = (n-1)*rsize + 1
          count(1) = min(rsize,ns-start(1)+1)
@@ -1293,33 +1480,46 @@ subroutine oasis_map_sMatReaddnc_ceg(sMat,SgsMap,DgsMap,newdom, &
          !----------------------------------------------------------------------------
          !>   * Read chunk of data
          !----------------------------------------------------------------------------
+
 !        status = nf90_inq_varid      (fid,'S'  ,vid)
          status = nf90_inq_varid      (fid,'remap_matrix'  ,vid)
+         if (status /= NF90_NOERR) then
+            write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+            write(nulprt,*) subname,estr,'var not found = ','remap_matrix'
+            call oasis_abort(file=__FILE__,line=__LINE__)
+         endif
 !        status = nf90_get_var(fid,vid,start,count,Sbuf)
          status = nf90_get_var(fid,vid,remaps,start2,count2)
+         if (status /= NF90_NOERR) THEN
+            write(nulprt,*) subname,' nf90_strerror = ',TRIM(nf90_strerror(status))
+            call oasis_flush(nulprt)
+         endif
          SReadData(:,:) = remaps(:,:)
-         IF (status /= NF90_NOERR) THEN
-             WRITE(nulprt,*) subname,' nf90_strerror = ',TRIM(nf90_strerror(status))
-             WRITE(nulprt,*) subname,'model :',compid,' proc :',mpi_rank_local
-             CALL oasis_flush(nulprt)
-         ENDIF
 !        status = nf90_inq_varid      (fid,'row',vid)
          status = nf90_inq_varid      (fid,'dst_address',vid)
+         if (status /= NF90_NOERR) then
+            write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+            write(nulprt,*) subname,estr,'var not found = ','dst_address'
+            call oasis_abort(file=__FILE__,line=__LINE__)
+         endif
          status = nf90_get_var   (fid,vid,RReadData,start,count)
-         IF (status /= NF90_NOERR) THEN
-             WRITE(nulprt,*) subname,' nf90_strerror = ',TRIM(nf90_strerror(status))
-             WRITE(nulprt,*) subname,'model :',compid,' proc :',mpi_rank_local
-             CALL oasis_flush(nulprt)
-         ENDIF
+         if (status /= NF90_NOERR) THEN
+            write(nulprt,*) subname,' nf90_strerror = ',TRIM(nf90_strerror(status))
+            call oasis_flush(nulprt)
+         endif
 
 !        status = nf90_inq_varid      (fid,'col',vid)
          status = nf90_inq_varid      (fid,'src_address',vid)
+         if (status /= NF90_NOERR) then
+            write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+            write(nulprt,*) subname,estr,'var not found = ','src_address'
+            call oasis_abort(file=__FILE__,line=__LINE__)
+         endif
          status = nf90_get_var   (fid,vid,CReadData,start,count)
-         IF (status /= NF90_NOERR) THEN
-             WRITE(nulprt,*) subname,' nf90_strerror = ',TRIM(nf90_strerror(status))
-             WRITE(nulprt,*) subname,'model :',compid,' proc :',mpi_rank_local
-             CALL oasis_flush(nulprt)
-         ENDIF
+         if (status /= NF90_NOERR) THEN
+            write(nulprt,*) subname,' nf90_strerror = ',TRIM(nf90_strerror(status))
+            call oasis_flush(nulprt)
+         endif
 
          ! Two stage process
          !   1. Count how many to send to each process
@@ -1333,18 +1533,55 @@ subroutine oasis_map_sMatReaddnc_ceg(sMat,SgsMap,DgsMap,newdom, &
          !>   * Determine which process owns each weight and count them
          !>   * Determine offsets in the array
          !----------------------------------------------------------------------------
+
+         if (namwgtopt == "abort_on_bad_index") then
+            abort_weight = .false.
+            do m = 1,count(1)
+               !--- check for bad weights
+               if ((RReadData(m) <= 0 .or. RReadData(m) > nb .or. &
+                    CReadData(m) <= 0 .or. CReadData(m) > na) &
+! tcx weight = 0
+                   .and. (minval(SReadData(:,m)) /= 0._R8 .or. maxval(SReadData(:,m)) /= 0._R8) &
+                  ) then
+                  abort_weight = .true.
+                  write(nulprt,'(3A,I12,A,I12,A,I12,A,G14.7,A,G14.7,A)') &
+                     subname,wstr,'BAD weight found in '//trim(filename), &
+                     m,'=id',CReadData(m),'=src',RReadData(m),'=dst',minval(SReadData(:,m)),'=minS',maxval(SReadData(:,m)),'=maxS'
+               endif
+            enddo
+            if (abort_weight) then
+               write(nulprt,*) subname,wstr,'BAD weight found, aborting'
+               call oasis_abort(file=__FILE__,line=__LINE__)
+            endif
+         endif
+
          do m = 1,count(1)
-            !--- which process owns this point?
-            if (newdom == 'src') then
+            !--- check for bad weights
+            if ((namwgtopt(1:16) == "ignore_bad_index") .and. &
+                (RReadData(m) <= 0 .or. RReadData(m) > nb .or. &
+                 CReadData(m) <= 0 .or. CReadData(m) > na)) then
+               pe = -11
+! tcx weight = 0
+               if (minval(SReadData(:,m)) /= 0._R8 .or. maxval(SReadData(:,m)) /= 0._R8) then
+                  if (OASIS_debug >= 2 .and. namwgtopt /= "ignore_bad_index_silently") then
+                     write(nulprt,'(3A,I12,A,I12,A,I12,A,G14.7,A,G14.7,A)') &
+                        subname,wstr,'BAD weight found in '//trim(filename), &
+                        m,'=id',CReadData(m),'=src',RReadData(m),'=dst',minval(SReadData(:,m)),'=minS',maxval(SReadData(:,m)),'=maxS'
+                  endif
+               endif
+            else if (newdom == 'src') then
                pe = get_cegindex(RReadData(m),lsstart,lscount,lspeloc)
             else if (newdom == 'dst') then
                pe = get_cegindex(CReadData(m),lsstart,lscount,lspeloc)
             endif
             pesave(m) = pe
-            
+
             ! Copy data, incrementing index array, pe = 1 to mpi_size_local
-            if (pe+1 < 1 .or. pe+1  > mpi_size_local) then
-               write(nulprt,*) subname,wstr,'get_cegindex search error', m,count(1),CReadData(m),RReadData(m),SReadData(:,m)
+            if (pe == -11) then
+               ! skip it, understood, get_cegindex will error with -99
+            elseif (pe+1 < 1 .or. pe+1  > mpi_size_local) then
+               ! skip this case too
+               ! write(nulprt,*) subname,wstr,'get_cegindex search error', m,count(1),CReadData(m),RReadData(m),SReadData(:,m)
             else
                cntrs(pe+1) = cntrs(pe+1) + 1  ! Note incrementing 1->noprocs rather than 0->noprocs-1
             endif
@@ -1359,13 +1596,8 @@ subroutine oasis_map_sMatReaddnc_ceg(sMat,SgsMap,DgsMap,newdom, &
          !----------------------------------------------------------------------------
          !>   * Determine which process owns each weight and fill arrays
          !----------------------------------------------------------------------------
+
          do m = 1,count(1)
-            !--- which process owns this point?
-            if (newdom == 'src') then
-               pe = get_cegindex(RReadData(m),lsstart,lscount,lspeloc)
-            else if (newdom == 'dst') then
-               pe = get_cegindex(CReadData(m),lsstart,lscount,lspeloc)
-            endif
 
             pe = pesave(m)
 
@@ -1389,6 +1621,7 @@ subroutine oasis_map_sMatReaddnc_ceg(sMat,SgsMap,DgsMap,newdom, &
          ! Copy root process data into local array
          ! Send data from root to other processes
          !----------------------------------------------------------------------------
+
          if (cntrs(0).gt.1) then ! Need to do it differently if it is for me!
             reclen = cntrs(0)-1
             ! Reallocate local weights arrays if they need to be bigger
@@ -1419,6 +1652,7 @@ subroutine oasis_map_sMatReaddnc_ceg(sMat,SgsMap,DgsMap,newdom, &
       !----------------------------------------------------------------------------
       !>   * Deallocate memory on root process
       !----------------------------------------------------------------------------
+
       m = -1
       do pe = 1, mpi_size_local-1
          !write(nulprt,*) subname, 'Final sending [to, datalen] ', m, cntrs(m)
@@ -1439,15 +1673,19 @@ subroutine oasis_map_sMatReaddnc_ceg(sMat,SgsMap,DgsMap,newdom, &
       deallocate(remaps, stat=status)
       if (status /= 0) call mct_perr_die(subName,':: deallocate remaps',status)
 
+      if (local_timers_on) call oasis_timer_stop('map_read_ceg_dist')
+
    !----------------------------------------------------------------------------
    !> * On non-root processes
    !----------------------------------------------------------------------------
 
    else   ! mytask == 0
    
+      if (local_timers_on) call oasis_timer_start('map_read_ceg_dist')
       !----------------------------------------------------------------------------
       !>   * Receive data from root
       !----------------------------------------------------------------------------
+
       call oasis_mpi_recv(reclen, 0, 4000, mpicom, subName//" MPI in reclen recv")
       ! Check we haven't now had the last data
       do while (reclen.ne.-1) 
@@ -1461,6 +1699,7 @@ subroutine oasis_map_sMatReaddnc_ceg(sMat,SgsMap,DgsMap,newdom, &
          !----------------------------------------------------------------------------
          !>   * Reallocate local weights arrays if they need to be bigger
          !----------------------------------------------------------------------------
+
          call augment_arrays(cnt, reclen, bsize, nwgts)
 
          !--- now each pe keeps what it has been sent
@@ -1471,21 +1710,25 @@ subroutine oasis_map_sMatReaddnc_ceg(sMat,SgsMap,DgsMap,newdom, &
 
          call oasis_mpi_recv(reclen, 0, 4000, mpicom, subName//" MPI in reclen recv")
       end do
+      if (local_timers_on) call oasis_timer_stop('map_read_ceg_dist')
 
    endif   ! mytask == 0
 
+   if (local_timers_on) call oasis_timer_start('map_read_ceg_smati')
    ! Fix cnt to be the length of the array
    cnt = cnt-1
 
    !----------------------------------------------------------------------------
    !> * Clean up arrays
    !----------------------------------------------------------------------------
+
    deallocate(Sbuf,Rbuf,Cbuf, stat=status)
    if (status /= 0) call mct_perr_die(subName,':: deallocate Sbuf',status)
 
    !----------------------------------------------------------------------------
    !> * Initialize the mct sMat data type
    !----------------------------------------------------------------------------
+
    ! mct_sMat_init must be given the number of rows and columns that
    ! would be in the full matrix.  Nrows= size of output vector=nb.
    ! Ncols = size of input vector = na.
@@ -1504,21 +1747,29 @@ subroutine oasis_map_sMatReaddnc_ceg(sMat,SgsMap,DgsMap,newdom, &
       sMat(n)%data%iAttr(igcol,1:cnt) = Cnew(1:cnt)
    enddo
    endif
+   if (local_timers_on) call oasis_timer_stop('map_read_ceg_smati')
 
    !----------------------------------------------------------------------------
    !> * More clean up
    !----------------------------------------------------------------------------
+
+   if (local_timers_on) call oasis_timer_start('map_read_ceg_clean')
    deallocate(Snew,Rnew,Cnew, stat=status)
    if (status /= 0) call mct_perr_die(subName,':: deallocate new',status)
 
    if (mytask == 0) then
       status = nf90_close(fid)
-      IF (OASIS_debug >= 2) THEN
-          WRITE(nulprt,*) subname," ... done reading file"
-          CALL oasis_flush(nulprt)
-      ENDIF
+      if (status /= NF90_NOERR) then
+         write(nulprt,*) subname,' nf90_strerror = ',trim(nf90_strerror(status))
+         call oasis_abort(file=__FILE__,line=__LINE__)
+      endif
+      if (OASIS_debug >= 2) THEN
+         write(nulprt,*) subname," ... done reading file"
+         call oasis_flush(nulprt)
+      endif
    endif
 
+   if (local_timers_on) call oasis_timer_stop('map_read_ceg_clean')
    call oasis_debug_exit(subname)
 
 end subroutine oasis_map_sMatReaddnc_ceg
@@ -1527,14 +1778,16 @@ end subroutine oasis_map_sMatReaddnc_ceg
 !!!!!!!!!!!!!!!!!!!!!!!!!  Extend array and store data  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+!> Function that increases temporary work array size of Snew, Rnew, Cnew
+
 subroutine augment_arrays(cnt, reclen, bsize, nwgts)
 
 ! !USES:
 
-   integer, intent(inout) :: cnt
-   integer, intent(in)    :: reclen
-   integer, intent(inout) :: bsize
-   integer, intent(in)    :: nwgts
+   integer, intent(inout) :: cnt  !< elements in current array
+   integer, intent(in)    :: reclen  !< elements of new data
+   integer, intent(inout) :: bsize   !< max size of current array
+   integer, intent(in)    :: nwgts   !< number of weights in S
 
    integer           :: status   ! netCDF routine return code
    !--- formats ---
@@ -1574,7 +1827,85 @@ end subroutine augment_arrays
 !------------------------------------------------------------
 ! !BOP ===========================================================================
 !
-! !IROUTINE:  get_cegindex - binary search for index in list
+!> Function that checks whether an index is part of a start and count list
+!
+!> Does a binary search on a sorted start and count list to determine
+!> whether index is a value in the list.  The list values consist of
+!> the values start(i):start(i)+count(i)-1 for all i.
+!
+! !DESCRIPTION: 
+!     Do a binary search to see if a value is contained in a list of
+!     values.  return true or false.  starti must be monotonically
+!     increasing, function does NOT check this.
+!
+! !INTERFACE:  -----------------------------------------------------------------
+
+logical function check_myindex(index,starti,counti)
+
+! !USES:
+
+   !--- local kinds ---
+   integer,parameter :: R8 = ip_double_p
+   integer,parameter :: IN = ip_i4_p
+
+! !INPUT/OUTPUT PARAMETERS:
+
+   integer(IN) :: index       !< index to search
+   integer(IN) :: starti(:)   !< start list
+   integer(IN) :: counti(:)   !< count list
+
+! !EOP
+
+   !--- local ---
+   integer(IN)    :: nl,nc,nr,ncprev 
+   integer(IN)    :: lsize
+   logical        :: stopnow
+
+   !--- formats ---
+   character(*),parameter :: subName = '(check_myindex) '
+
+!-------------------------------------------------------------------------------
+!
+!-------------------------------------------------------------------------------
+
+!   call oasis_debug_enter(subname)
+   check_myindex = .false.
+
+   lsize = size(starti)
+   if (lsize < 1) then
+!     call oasis_debug_exit(subname)
+      return
+   endif
+
+   nl = 0
+   nr = lsize + 1
+   nc = (nl+nr)/2
+   stopnow = .false.
+   do while (.not.stopnow)
+      if (index < starti(nc)) then
+         nr = nc
+      elseif (index > (starti(nc) + counti(nc) - 1)) then
+         nl = nc
+      else
+         check_myindex = .true.
+!        call oasis_debug_exit(subname)
+         return
+      endif
+      ncprev = nc
+      nc = (nl + nr)/2
+      if (nc == ncprev .or. nc < 1 .or. nc > lsize) stopnow = .true.
+   enddo
+
+   check_myindex = .false.
+
+!   call oasis_debug_exit(subname)
+
+end function check_myindex
+
+!------------------------------------------------------------
+! !BOP ===========================================================================
+!
+!> Function that carrys out a binary search for index in list
 !
 ! !DESCRIPTION: 
 !     Do a binary search to see if a value is contained in a list of

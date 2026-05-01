@@ -7,9 +7,9 @@ MODULE mod_oasis_parameters
 !    ******
 !             26-10-99   Version 2.4   Jean Latour (F.S.E.) MPI-2 support
 !@
-! -- mod_clim_proto.f90  12-06-02  Version 3.0   A. Caubel 
+! -- mod_clim_proto.f90  12-06-02  Version 3.0   A. Caubel
 ! --                     20-05-03  added PRISM_Recvd/Sent   S.Legutke
-     
+
 !    ******************
 !
 !@  Contents : variables related to the CLIM library
@@ -17,23 +17,23 @@ MODULE mod_oasis_parameters
 !@
 !
   USE mod_oasis_kinds
-  INTEGER (kind=ip_intwp_p), PARAMETER :: PRISM_Ok	 = 0 
+  INTEGER (kind=ip_intwp_p), PARAMETER :: PRISM_Ok	 = 0
   INTEGER (kind=ip_intwp_p), PARAMETER :: OASIS_Ok       = PRISM_Ok
 
 !-----Ports status
 
-  INTEGER (kind=ip_intwp_p), PARAMETER :: PRISM_NotDef      = -2 
+  INTEGER (kind=ip_intwp_p), PARAMETER :: PRISM_NotDef      = -2
   INTEGER (kind=ip_intwp_p), PARAMETER :: OASIS_NotDef      = PRISM_NotDef
   INTEGER (kind=ip_intwp_p), PARAMETER :: OASIS_Var_Uncpl   = -1
   INTEGER (kind=ip_intwp_p), PARAMETER :: PRISM_Out         = 20
   INTEGER (kind=ip_intwp_p), PARAMETER :: OASIS_Out         = PRISM_Out
   INTEGER (kind=ip_intwp_p), PARAMETER :: PRISM_In          = 21
   INTEGER (kind=ip_intwp_p), PARAMETER :: OASIS_In          = PRISM_In
-  INTEGER (kind=ip_intwp_p), PARAMETER :: PRISM_InOut       = 2 
+  INTEGER (kind=ip_intwp_p), PARAMETER :: PRISM_InOut       = 2
   INTEGER (kind=ip_intwp_p), PARAMETER :: OASIS_InOut       = PRISM_InOut
-  INTEGER (kind=ip_intwp_p), PARAMETER :: PRISM_Recvd       = 3 
+  INTEGER (kind=ip_intwp_p), PARAMETER :: PRISM_Recvd       = 3
   INTEGER (kind=ip_intwp_p), PARAMETER :: OASIS_Recvd       = PRISM_Recvd
-  INTEGER (kind=ip_intwp_p), PARAMETER :: PRISM_Sent        = 4 
+  INTEGER (kind=ip_intwp_p), PARAMETER :: PRISM_Sent        = 4
   INTEGER (kind=ip_intwp_p), PARAMETER :: OASIS_Sent        = PRISM_Sent
   INTEGER (kind=ip_intwp_p), PARAMETER :: PRISM_LocTrans    = 5
   INTEGER (kind=ip_intwp_p), PARAMETER :: OASIS_LocTrans    = PRISM_LocTrans
@@ -92,67 +92,116 @@ MODULE mod_oasis_parameters
   INTEGER (kind=ip_intwp_p), PARAMETER :: ip_cnone   = 0
   INTEGER (kind=ip_intwp_p), PARAMETER :: ip_cglobal = 1
   INTEGER (kind=ip_intwp_p), PARAMETER :: ip_cglbpos = 2
+  INTEGER (kind=ip_intwp_p), PARAMETER :: ip_cgsspos = 6
   INTEGER (kind=ip_intwp_p), PARAMETER :: ip_cbasbal = 4
   INTEGER (kind=ip_intwp_p), PARAMETER :: ip_cbaspos = 5
+  INTEGER (kind=ip_intwp_p), PARAMETER :: ip_cbsspos = 7
+  INTEGER (kind=ip_intwp_p), PARAMETER :: ip_cgsmart = 8 
 
 !-----Parallel distribution
 
-  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Strategy = 1 
-  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Segments = 2 
+  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Strategy = 1
+  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Segments = 2
+  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Npoints  = 2
 
-  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Serial   = 0 
-  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Apple    = 1 
-  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Box      = 2 
-  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Orange   = 3 
-  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Points   = 4 
+  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Serial   = 0
+  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Apple    = 1
+  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Box      = 2
+  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Orange   = 3
+  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Points   = 4
 
-  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Offset   = 2 
-  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Length   = 3 
-  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_SizeX    = 3 
-  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_SizeY    = 4 
-  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_LdX      = 5 
+  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Offset   = 2
+  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Length   = 3
+  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_SizeX    = 3
+  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_SizeY    = 4
+  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_LdX      = 5
+
+  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Serial_Params = 3
+  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Apple_Params  = 3
+  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Box_Params    = 5
+
+  INTEGER (kind=ip_intwp_p), PARAMETER :: OASIS_Strategy = CLIM_Strategy
+  INTEGER (kind=ip_intwp_p), PARAMETER :: OASIS_Segments = CLIM_Segments
+  INTEGER (kind=ip_intwp_p), PARAMETER :: OASIS_Npoints  = CLIM_Npoints
+
+  INTEGER (kind=ip_intwp_p), PARAMETER :: OASIS_Serial   = CLIM_Serial
+  INTEGER (kind=ip_intwp_p), PARAMETER :: OASIS_Apple    = CLIM_Apple
+  INTEGER (kind=ip_intwp_p), PARAMETER :: OASIS_Box      = CLIM_Box
+  INTEGER (kind=ip_intwp_p), PARAMETER :: OASIS_Orange   = CLIM_Orange
+  INTEGER (kind=ip_intwp_p), PARAMETER :: OASIS_Points   = CLIM_Points
+
+  INTEGER (kind=ip_intwp_p), PARAMETER :: OASIS_Offset   = CLIM_Offset
+  INTEGER (kind=ip_intwp_p), PARAMETER :: OASIS_Length   = CLIM_Length
+  INTEGER (kind=ip_intwp_p), PARAMETER :: OASIS_SizeX    = CLIM_SizeX
+  INTEGER (kind=ip_intwp_p), PARAMETER :: OASIS_SizeY    = CLIM_SizeY
+  INTEGER (kind=ip_intwp_p), PARAMETER :: OASIS_LdX      = CLIM_LdX
+
+  INTEGER (kind=ip_intwp_p), PARAMETER :: OASIS_Serial_Params = CLIM_Serial_Params
+  INTEGER (kind=ip_intwp_p), PARAMETER :: OASIS_Apple_Params  = CLIM_Apple_Params
+  INTEGER (kind=ip_intwp_p), PARAMETER :: OASIS_Box_Params    = CLIM_Box_Params
 
 !-----Datatypes
 
-  INTEGER (kind=ip_intwp_p), PARAMETER :: PRISM_Real   = 4  
+  INTEGER (kind=ip_intwp_p), PARAMETER :: PRISM_Real   = 4
   INTEGER (kind=ip_intwp_p), PARAMETER :: OASIS_Real   = PRISM_Real
-  INTEGER (kind=ip_intwp_p), PARAMETER :: PRISM_Double = 8 
+  INTEGER (kind=ip_intwp_p), PARAMETER :: PRISM_Double = 8
   INTEGER (kind=ip_intwp_p), PARAMETER :: OASIS_Double = PRISM_Double
 
 !-----Quit parameters
 !
-!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_ContPvm = 0 
-!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_StopPvm = 1 
+!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_ContPvm = 0
+!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_StopPvm = 1
 !
 !-----Error Codes
 !
-!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_MaxCodes  = -22 
+!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_MaxCodes  = -22
 !
-!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Ok	 = 0 
-!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_FastExit  = -1 
-!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_BadName   = -2 
-!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_BadPort   = -3 
-!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_BadType   = -4 
-!  INTEGER (kind=ip_intwp_p), PARAMETER :: PRISM_DoubleDef= -5 
-!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_NotStep   = -6 
-!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_IncStep   = -7 
-!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_IncSize   = -8 
-!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_NotClim   = -9 
-!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_TimeOut   = -10 
-!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Pvm       = -11 
-!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_FirstCall = -12 
-!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_PbRoute   = -13 
-!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Group     = -14 
-!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_BadTaskId = -15 
-!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_NoTask    = -16 
-!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_InitBuff  = -17 
-!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Pack      = -18 
-!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Unpack    = -19 
-!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Down      = -20 
-!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_PvmExit   = -21 
-!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Mpi       = -22 
-!  INTEGER (kind=ip_intwp_p), PARAMETER :: PRISM_NotFreq  = -23 
+!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Ok	 = 0
+!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_FastExit  = -1
+!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_BadName   = -2
+!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_BadPort   = -3
+!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_BadType   = -4
+!  INTEGER (kind=ip_intwp_p), PARAMETER :: PRISM_DoubleDef= -5
+!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_NotStep   = -6
+!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_IncStep   = -7
+!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_IncSize   = -8
+!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_NotClim   = -9
+!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_TimeOut   = -10
+!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Pvm       = -11
+!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_FirstCall = -12
+!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_PbRoute   = -13
+!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Group     = -14
+!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_BadTaskId = -15
+!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_NoTask    = -16
+!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_InitBuff  = -17
+!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Pack      = -18
+!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Unpack    = -19
+!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Down      = -20
+!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_PvmExit   = -21
+!  INTEGER (kind=ip_intwp_p), PARAMETER :: CLIM_Mpi       = -22
+!  INTEGER (kind=ip_intwp_p), PARAMETER :: PRISM_NotFreq  = -23
 !
+
+CONTAINS
+
+   INTEGER (kind=ip_intwp_p) FUNCTION CLIM_Orange_Params(n_segments)
+      INTEGER (kind=ip_intwp_p), INTENT(IN) :: n_segments
+      CLIM_Orange_Params = 2 + 2*n_segments
+   END FUNCTION CLIM_Orange_Params
+
+   INTEGER (kind=ip_intwp_p) FUNCTION CLIM_Points_Params(n_points)
+      INTEGER (kind=ip_intwp_p), INTENT(IN) :: n_points
+      CLIM_Points_Params = 2 + n_points
+   END FUNCTION CLIM_Points_Params
+
+   INTEGER (kind=ip_intwp_p) FUNCTION OASIS_Orange_Params(n_segments)
+      INTEGER (kind=ip_intwp_p), INTENT(IN) :: n_segments
+      OASIS_Orange_Params = 2 + 2*n_segments
+   END FUNCTION OASIS_Orange_Params
+
+   INTEGER (kind=ip_intwp_p) FUNCTION OASIS_Points_Params(n_points)
+      INTEGER (kind=ip_intwp_p), INTENT(IN) :: n_points
+      OASIS_Points_Params = 2 + n_points
+   END FUNCTION OASIS_Points_Params
 
 END MODULE mod_oasis_parameters
-

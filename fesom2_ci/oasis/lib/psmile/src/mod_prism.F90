@@ -33,12 +33,14 @@ module mod_prism
    use mod_oasis_grid   ,only: prism_write_corner        => oasis_write_corner 
    use mod_oasis_grid   ,only: prism_write_mask          => oasis_write_mask
    use mod_oasis_grid   ,only: prism_write_area          => oasis_write_area
+   use mod_oasis_grid   ,only: prism_write_frac          => oasis_write_frac
    use mod_oasis_grid   ,only: prism_terminate_grids_writing => oasis_terminate_grids_writing
 
    use mod_oasis_auxiliary_routines ,only: prism_get_localcomm_proto => oasis_get_localcomm
    use mod_oasis_auxiliary_routines ,only: prism_set_couplcomm       => oasis_set_couplcomm
    use mod_oasis_auxiliary_routines ,only: prism_create_couplcomm    => oasis_create_couplcomm
    use mod_oasis_auxiliary_routines ,only: prism_get_intracomm       => oasis_get_intracomm
+   use mod_oasis_auxiliary_routines ,only: prism_get_multi_intracomm => oasis_get_multi_intracomm
    use mod_oasis_auxiliary_routines ,only: prism_get_intercomm       => oasis_get_intercomm 
    use mod_oasis_auxiliary_routines, only: prism_set_debug           => oasis_set_debug 
    use mod_oasis_auxiliary_routines, only: prism_get_debug           => oasis_get_debug

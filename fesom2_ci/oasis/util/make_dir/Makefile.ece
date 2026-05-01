@@ -1,0 +1,250 @@
+# --------------------------------
+# EC-Earth makefile for OASIS3-MCT
+# --------------------------------
+# No other code before the next three lines!
+this_file := $(lastword $(MAKEFILE_LIST))
+this_path := $(dir $(realpath $(this_file)))
+me := -f $(this_file) --no-print-directory  # We assume GNUmake!
+
+# Automatic include for all sub-makes (see gmake docs for 'MAKEFILES' special variable)
+MAKEFILES := $(this_path)make.ece.inc $(this_path)make.common
+
+include make.ece.inc
+include make.common
+
+.PHONY: \
+    default \
+    fortran-libs-static fortran-libs-shared \
+    libs-static libs-shared \
+    pyoasis \
+    dirs-static dirs-shared \
+    mct-static mct-shared \
+    scrip-static scrip-shared \
+    psmile-static psmile-shared \
+    cbindings-static cbindings-shared \
+    pyoasis-install \
+    clean-static clean-shared realclean check-vars
+
+.DEFAULT:
+	@echo
+	@echo "make: *** No rule to make target $@."
+	@$(MAKE) $(me) help
+
+default: fortran-libs-static
+
+help:
+	@echo
+	@echo "Recommended targets:"
+	@echo "  libs-static         = Static OASIS libraries including Fortran and C-bindings"
+	@echo "  libs-shared         = Shared (dynamic) OASIS libraries including Fortran and C-bindings"
+	@echo "  pyoasis             = Build and install shared-libs plus Python classes"
+	@echo "  clean/realclean     = Remove build files/build files and alll libraries"
+	@echo "Alternative targets:"
+	@echo "  fortran-libs-static = Static OASIS libraries for Fortran only"
+	@echo "  fortran-libs-shared = Shared (dynamic) OASIS libraries for fortran only"
+	@echo
+
+fortran-libs-static: check-vars
+	@echo "--> Build static libraries for OASIS3-MCT"
+	$(call check_defined, AR ARFLAGS, static libs archiver command/options)
+	$(call check_defined, LIBSRC, path for Fortran and C sources)
+	@$(MAKE) $(me) dirs-static
+	@$(MAKE) $(me) mct-static
+	@$(MAKE) $(me) scrip-static
+	@$(MAKE) $(me) psmile-static
+
+fortran-libs-shared: check-vars
+	@echo "--> Build shared libraries for OASIS3-MCT"
+	$(call check_defined, DYNOPT LDDYNOPT, compilation options for shared libs)
+	@$(MAKE) $(me) dirs-shared
+	@$(MAKE) $(me) mct-shared
+	@$(MAKE) $(me) scrip-shared
+	@$(MAKE) $(me) psmile-shared
+
+libs-static: fortran-libs-static
+	@echo "--> Compile OASIS3-MCT C bindings static libraries"
+	@$(MAKE) $(me) cbindings-static
+
+libs-shared: fortran-libs-shared
+	@echo "--> Compile OASIS3-MCT C bindings shared libraries"
+	@$(MAKE) $(me) cbindings-shared
+
+pyoasis: libs-shared
+	@echo "--> Build and install PyOasis"
+	$(call check_defined, MPIRUN, MPI launcher command)
+	@$(MAKE) $(me) pyoasis-install
+
+dirs-static:
+	@echo "--> Create directories for compiling static libraries"
+	@echo "    in $(LIBBUILD)"
+	@install -d -m0755 $(LIBBUILD)/scrip
+	@install -d -m0755 $(LIBBUILD)/mct-src
+	@install -d -m0755 $(LIBBUILD)/mct
+	@install -d -m0755 $(LIBBUILD)/psmile.$(CHAN)
+	@install -d -m0755 $(LIBBUILD)/cbindings
+	@install -d -m0755 $(ARCHDIR)/include
+	@install -d -m0755 $(ARCHDIR)/lib
+
+dirs-shared:
+	@echo "--> Create directories for compiling shared libraries"
+	@echo "    in $(LIBBUILDSHARED)"
+	@install -d -m0755 $(LIBBUILDSHARED)/scrip
+	@install -d -m0755 $(LIBBUILDSHARED)/mct-src
+	@install -d -m0755 $(LIBBUILDSHARED)/mct
+	@install -d -m0755 $(LIBBUILDSHARED)/psmile.$(CHAN)
+	@install -d -m0755 $(LIBBUILDSHARED)/cbindings
+	@install -d -m0755 $(ARCHDIR)/include
+	@install -d -m0755 $(ARCHDIR)/lib
+
+mct-static:
+	@echo "--> Configure MPEU and MCT libraries"
+	@( \
+		cd $(LIBBUILD)/mct-src; \
+		cp -fr $(LIBSRC)/mct/* .; \
+        ./configure MPIFC="$(F90) $(STATOPT)" FC="$(F90) $(STATOPT)" CC="$(CC) $(STATOPT)"; \
+	)
+	@echo "--> Compile MPEU and MCT libraries"
+	@$(MAKE) -C $(LIBBUILD)/mct-src
+	@echo "--> Install MPEU and MCT libraries"
+	@install -m 0644 $(LIBBUILD)/mct-src/*/lib*.a $(ARCHDIR)/lib/
+	@install -m 0644 $(LIBBUILD)/mct-src/*/*.o $(LIBBUILD)/mct/
+	@install -m 0644 $(LIBBUILD)/mct-src/*/*.mod $(LIBBUILD)/mct/
+	@install -m 0644 $(LIBBUILD)/mct-src/*/*.mod $(ARCHDIR)/include/
+ 
+mct-shared:
+	@echo "--> Configure MPEU and MCT libraries"
+	@( \
+        cd $(LIBBUILDSHARED)/mct-src; \
+        cp -frp $(LIBSRC)/mct/* .;\
+        ./configure MPIFC="$(F90) $(DYNOPT)" FC="$(F90) $(DYNOPT)" CC="$(CC) $(DYNOPT)"; \
+    )
+	@echo "--> Compile MPEU and MCT libraries"
+	@$(MAKE) -C $(LIBBUILDSHARED)/mct-src
+	@echo "--> Create shared library libmpeu.so"
+	@( \
+        cd $(LIBBUILDSHARED)/mct-src; \
+	    $(F90) $(DYNOPT) $(LDFLAGS) $(LDDYNOPT) \
+            -o $(ARCHDIR)/lib/libmpeu.so mpeu/*.o $(NETCDF_LIBRARY); \
+    )
+	@echo "--> Create shared library libmct.so"
+	@( \
+        cd $(LIBBUILDSHARED)/mct-src; \
+	    $(F90) $(DYNOPT) $(LDFLAGS) $(LDDYNOPT) \
+            -o $(ARCHDIR)/lib/libmct.so mct/*.o -L$(ARCHDIR)/lib -lmpeu $(NETCDF_LIBRARY); \
+    )
+	@echo "--> Install MPEU and MCT libraries"
+	@install -m 0644 $(LIBBUILDSHARED)/mct-src/*/*.o $(LIBBUILDSHARED)/mct/
+	@install -m 0644 $(LIBBUILDSHARED)/mct-src/*/*.mod $(LIBBUILDSHARED)/mct/
+	@install -m 0644 $(LIBBUILDSHARED)/mct-src/*/*.mod $(ARCHDIR)/include/
+
+scrip-static:
+	@echo "--> Compile SCRIP library"
+	@install -m 0644 $(LIBSRC)/scrip/src/Makefile $(LIBBUILD)/scrip/
+	@$(MAKE) -C $(LIBBUILD)/scrip all
+	@echo "--> Install SCRIP modules"
+	@install -m 0644 $(LIBBUILD)/scrip/*.mod $(ARCHDIR)/include/
+
+scrip-shared:
+	@echo "--> Compile shared SCRIP library"
+	@install -m 0644 $(LIBSRC)/scrip/src/Makefile $(LIBBUILDSHARED)/scrip/
+	@$(MAKE) -C $(LIBBUILDSHARED)/scrip shared
+	@echo "--> Install SCRIP modules"
+	@install -m 0644 $(LIBBUILDSHARED)/scrip/*.mod $(ARCHDIR)/include/
+
+psmile-static:
+	@echo "--> Compile PSMILE library"
+	@install -m 0644 $(LIBSRC)/psmile/src/Makefile $(LIBBUILD)/psmile.$(CHAN)/
+	@$(MAKE) -C $(LIBBUILD)/psmile.$(CHAN) all
+	@echo "--> Installing PSMILE modules"
+	@install -m 0644 $(LIBBUILD)/psmile.$(CHAN)/*.mod $(ARCHDIR)/include/
+
+psmile-shared:
+	@echo "--> Compile shared PSMILE library"
+	install -m 0644 $(LIBSRC)/psmile/src/Makefile $(LIBBUILDSHARED)/psmile.$(CHAN)/
+	$(MAKE) -C $(LIBBUILDSHARED)/psmile.$(CHAN) shared
+	echo "--> Installing PSMILE modules"
+	install -m 0644 $(LIBBUILDSHARED)/psmile.$(CHAN)/*.mod $(ARCHDIR)/include/
+
+cbindings-static:
+	@echo "--> Compiling static C bindings"
+	@install -m 0644 $(LIBSRC)/cbindings/Makefile $(LIBBUILD)/cbindings/
+	@$(MAKE) -C $(LIBBUILD)/cbindings libstatic
+	@echo "--> Installing cbindings modules"
+	@install -m 0644 $(LIBBUILD)/cbinding/*.mod $(ARCHDIR)/include/
+
+cbindings-shared:
+	@echo "--> Compiling shared C bindings"
+	@install -m 0644 $(LIBSRC)/cbindings/Makefile $(LIBBUILDSHARED)/cbindings/
+	@$(MAKE) -C $(LIBBUILDSHARED)/cbindings libshared
+	@echo "--> Installing C binding modules"
+	@install -m 0644 $(LIBBUILDSHARED)/cbindings/*.mod $(ARCHDIR)/include/
+
+define sh_init
+export PYOASIS_ROOT=${ARCHDIR}
+export LD_LIBRARY_PATH=$${PYOASIS_ROOT}/lib:$${LD_LIBRARY_PATH}
+export PYTHONPATH=$${PYOASIS_ROOT}/python:$${PYTHONPATH}
+export MPIRUN4PY="$${MPIRUN}"
+endef
+export sh_init
+
+define csh_init
+setenv PYOASIS_ROOT ${ARCHDIR}
+setenv LD_LIBRARY_PATH $${PYOASIS_ROOT}/lib:$${LD_LIBRARY_PATH}
+setenv PYTHONPATH $${PYOASIS_ROOT}/python:$${PYTHONPATH}
+setenv MPIRUN4PY "$${MPIRUN}"
+endef
+export csh_init
+
+pyoasis-install:
+	@echo "--> Install pyOASIS modules"
+	@mkdir -p $(ARCHDIR)/python/pyoasis
+	@install -m 0644 $(COUPLE)/pyoasis/src/*.py $(ARCHDIR)/python/pyoasis/
+	@echo "--> Create pyOASIS init files"
+	@echo "$$sh_init" > ${ARCHDIR}/python/init.sh
+	@echo "$$csh_init" > ${ARCHDIR}/python/init.csh
+	@echo
+	@echo =====================================================================
+	@echo "The following lines have been put in the file"
+	@echo "${ARCHDIR}/python/init.sh:"
+	@echo
+	@echo "$$sh_init"
+	@echo
+	@echo "and ${ARCHDIR}/python/init.csh:"
+	@echo
+	@echo "$$csh_init"
+	@echo
+	@echo "Before using pyOASIS issue the command, run \"source <file>\""
+	@echo "using the appropriate <file> for you shell."
+	@echo "Alternatively, these lines could be added to your \~/.bashrc or \~/.cshrc"
+	@echo =====================================================================
+	@echo
+
+clean-static: check-vars
+	@echo "--> Remove build dirs for static libraries"
+	@rm -rf $(LIBBUILD)
+
+clean-shared: check-vars
+	@echo "--> Remove build dirs for shared libraries"
+	@rm -rf $(LIBBUILDSHARED)
+
+realclean: check-vars
+	@echo "--> Remove ARCHDIR '$(notdir $(ARCHDIR))'"
+	@rm -rf $(ARCHDIR)
+
+check-vars:
+	@echo "--> Check basic configuration variables"
+	$(call check_defined, COUPLE, source directory)
+	$(call check_defined, ARCHDIR, installation path)
+	$(call check_defined, CHAN, MPI flavour MPI1/MPI2)
+	$(call check_defined, MAKE, which make command)
+	$(call check_defined, F90 F f90 f CC, compiler command)
+	$(call check_defined, F90FLAGS f90FLAGS FFLAGS fFLAGS CCFLAGS, compiler options)
+
+# https://stackoverflow.com/questions/10858261/how-to-abort-makefile-if-variable-not-set
+check_defined = \
+    $(strip $(foreach 1,$1, \
+        $(call _check_defined,$1,$(strip $(value 2)))))
+_check_defined = \
+    $(if $(value $1),, \
+        $(error Undefined $1$(if $2, ($2))$(if $(value @), \
+                required by target '$@')))
