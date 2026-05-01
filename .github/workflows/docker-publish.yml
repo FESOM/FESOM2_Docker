@@ -34,6 +34,7 @@ jobs:
   build:
     needs: generate-matrix
     strategy:
+      fail-fast: false
       matrix:
         dockerfile: ${{fromJson(needs.generate-matrix.outputs.matrix)}}
     runs-on: ubuntu-latest
