@@ -26,7 +26,11 @@ RUN wget \
 
 RUN git clone https://github.com/FESOM/mkfesom.git
 WORKDIR /fesom/mkfesom/
-RUN pip install -e .
+# setuptools 80 dropped the bundled pkg_resources module by default, but
+# mkfesom's mkrun.py still does `import pkg_resources`. Pin to a version
+# that still exposes it until mkfesom is migrated to importlib.resources.
+RUN pip install 'setuptools<80' \
+  && pip install -e .
 WORKDIR /fesom/
 RUN mkdir results
 
