@@ -1,0 +1,16 @@
+NETCDF_INCDIR="-I $NETCDF_INC_DIR"
+NETCDF_LIBDIR="-L $NETCDF_LIB_DIR"
+NETCDF_LIB="-lnetcdff_parallel_intel -lnetcdff_parallel -lnetcdff -lnetcdf_c++4_parallel_intel -lnetcdf_c++4_parallel -lnetcdf_c++4 -lnetcdf_parallel_intel -lnetcdf_parallel -lnetcdf"
+
+MPI_INCDIR=""
+MPI_LIBDIR=""
+MPI_LIB=""
+
+#HDF5_INCDIR="-I $HDF5_INC_DIR"
+HDF5_LIBDIR="-L $HDF5_LIB_DIR"
+HDF5_LIB="-lhdf5_hl_parallel_intel -lhdf5_hl_parallel -lhdf5_hl -lhdf5_parallel_intel -lhdf5_parallel -lhdf5 -lz"
+
+OASIS_INCDIR="-I @oasis_inc@"
+OASIS_LIBDIR="-L @oasis_lib@"
+OASIS_LIB="-lpsmile -lscrip -lmct -lmpeu"
+

@@ -1,0 +1,12 @@
+NETCDF_INCDIR="-I${NETCDF_DIR}/include -I${PNETCDF_DIR}/include"
+NETCDF_LIBDIR="-L${NETCDF_DIR}/lib -L${PNETCDF_DIR}/lib"
+NETCDF_LIB="-L${NETCDF_DIR}/lib -lnetcdff -L${NETCDF_DIR}/lib -lnetcdf -L${PNETCDF_DIR}/lib -lpnetcdf"
+
+HDF5_INCDIR="-I${HDF5_DIR}/include"
+HDF5_LIBDIR="-L${HDF5_DIR}/lib"
+HDF5_LIB="-L${HDF5_DIR}/lib -lhdf5_hl -L${HDF5_DIR}/lib -lhdf5"
+
+OASIS_INCDIR=""
+OASIS_LIBDIR=""
+OASIS_LIB=""
+

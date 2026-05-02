@@ -1,0 +1,93 @@
+======================== Recipe 2 : using anaconda =========================
+
+# install packages using macports
+sudo port install openmpi
+# activate what we have just installed (mandatory)
+sudo port select mpi openmpi-mp-fortran
+# my anaconda is in my $HOME - no need for sudo
+pip install mpi4py
+conda install netcdf4
+
+compile the remap library
+run the remap.py script
+
+==================== Checking which libraries are loaded ======================
+
+Useful to make sure that mpirun, remap and python use the same MPI library.
+
+sudo dtruss -f -t open sudo -u $(whoami) mpirun -np 1 python test.py 2>out
+grep mpich out
+grep openmpi out
+
+where test.py contains
+ from mpi4py import MPI
+ import netCDF4
+ import ctypes as ct
+ import os
+ test = ct.cdll.LoadLibrary(os.path.realpath('libmapper.so'))
+
+If grep finds both mpich and openmpi, something is wrong !
+
+====================== Various ways to mess up python/netCDF/MPI on MacOS ====================
+
+Anaconda vs macports python
+===========================
+I have several pythons installed : 3 from Apple, one from macports and one from the Anaconda distribution, which is the default on my path.
+
+* find whether we use python from MacPorts or anaconda
+ which python
+the one from macports is in /opt/local/bin
+
+* check active macports python version
+ port select python
+ (mine : python27)
+
+* if desired, set the path to avoid anaconda
+echo $PATH
+result :  /Users/dubos/anaconda/bin:/opt/local/bin:/opt/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/X11/bin:/usr/texbin
+export PATH=/opt/local/bin:/opt/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/X11/bin:/usr/texbin
+
+Below,  [with macports] assumes that « which python » finds /opt/local/bin/python » while [with anaconda] assumes it finds the anaconda-provided python.
+
+Python-netCDF
+=============
+[with macports] :
+sudo port install py-netcdf4
+
+[with anaconda] :
+conda install netcdf4
+Notice that this will also compile its own instance of netCDF.
+
+Notice that in principle one could install python-netcdf using pip or easy_install. In my case it fails - there is a version mismatch for the HDF library at runtime
+
+MPI
+===
+Macports can install openmpi, mpich or both (I have both). If both are installed one is activated by « port select ».
+
+It will install it for a specific compiler.
+* checking your active compiler
+ port select gcc
+* installing openmpi 
+ sudo port install openmpi 
+* checking for which gcc openmpi has been compiled 
+ port installed openmpi-default
+* checking your active mpi
+ port select mpi
+* selecting openmpi (for example)
+ sudo port select mpi openmpi-mp-fortran
+
+MPI4py
+======
+It is important to compile the mapper library with the same MPI as mpi4py !
+easy_install fails on my Mac so I must use pip
+
+[with MacPorts] :
+  sudo port install py-pip
+  sudo port select pip pip27
+  sudo pip install mpi4py
+
+[with anaconda]  : pip is already installed,
+  which pip
+  pip install mpi4py
+
+

@@ -1,0 +1,28 @@
+6c6
+< 
+---
+>   
+36c36
+< 
+---
+>   
+45c45
+< 
+---
+>   
+52,53c52,53
+<   div    = src_ni_glo/size
+<   remain = MOD( src_ni_glo, size )
+---
+>   div    = src_ni_glo/size 
+>   remain = MOD( src_ni_glo, size ) 
+60c60
+<   ENDIF
+---
+>   ENDIF  
+91,92c91,92
+<   CALL xios_set_domain_attr("src_domain",data_dim=1, data_ni=src_ni, data_i_index=src_data_i_index, data_n_index=src_ni)
+<   CALL xios_set_domain_attr("src_domain",lonvalue=src_lon,latvalue=src_lat, bounds_lon=src_boundslon, bounds_lat=src_boundslat, nvertex=src_nvertex)
+---
+>   CALL xios_set_domain_attr("src_domain",data_dim=1, data_ni=src_ni, data_i_index=src_data_i_index, data_n_index=src_ni, nvertex=src_nvertex)
+>   CALL xios_set_domain_attr("src_domain",lonvalue=src_lon,latvalue=src_lat, bounds_lon=src_boundslon, bounds_lat=src_boundslat)

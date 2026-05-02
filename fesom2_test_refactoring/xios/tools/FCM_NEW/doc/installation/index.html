@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>FCM: Installation</title>
+  <meta name="author" content="FCM team" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="../etc/fcm-icon.png" type="image/png" />
+  <link rel="shortcut icon" href="../etc/fcm-icon.png" type="image/png" />
+  <link href="../etc/bootstrap/css/bootstrap.min.css" type="text/css"
+  rel="stylesheet" media="screen" />
+  <link href="../etc/fcm.css" type="text/css" rel="stylesheet" media="screen" />
+</head>
+<body>
+  <div class="navbar navbar-inverse">
+    <div class="container-fluid">
+      <div class="navbar-header">
+        <a class="navbar-brand" href=".."><span class="fcm-version">FCM</span></a>
+      </div>
+      <div class="collapse navbar-collapse">
+        <ul class="nav navbar-nav">
+          <li class="active"><a href="#">Installation</a></li>
+
+          <li><a href="../user_guide/">User Guide</a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-header">
+    <div class="fcm-page-content pull-right well well-sm"></div>
+    <h1>FCM: Installation</h1>
+  </div>
+
+  <div class="container">
+  <div class="row">
+  <div class="col-md-12">
+  <h2 id="requirements">System Requirements</h2>
+
+  <p>FCM is intended to run on a Unix/Linux system. It is known to work on
+  recent popular Linux distributions such as RHEL-6. See
+  <a href="https://github.com/metomi/metomi-vms">metomi-vms @ Github</a> for
+  information.</p>
+
+  <p>FCM releases can be downloaded from <a href=
+  "https://github.com/metomi/fcm/releases">Github</a>. Download the tar.gz file
+  and un-pack it into an appropriate location on your system. Add the
+  <samp>bin/</samp> directory into your <var>PATH</var> environment variable.
+  Enable the configuration files in <samp>etc/fcm/</samp> directory and edit
+  them to meet the your requirements. Once you have done this you should now
+  have access to the FCM user utilities, assuming that you have met the
+  requirements described below:</p>
+
+  <dl class="well">
+    <dt><a href="http://www.perl.org/">Perl</a></dt>
+
+    <dd>
+      <p><dfn>used by:</dfn> <code>fcm</code>.</p>
+
+      <p><dfn>versions known to work:</dfn> RHEL-6: 5.10.1</p>
+
+      <p><dfn>remark:</dfn> We assume that all <em>core</em> Perl modules (as
+      documented by <a href="http://perldoc.perl.org/">perldoc.perl.org</a>) of
+      the <em>known to work versions</em> are installed on your system. (N.B. On
+      platforms based on RHEL, you may need the <em>perl-core</em> RPM instead
+      of just <em>perl</em>, see <a href=
+      "http://www.nntp.perl.org/group/perl.perl5.porters/2009/08/msg149891.html">this
+      discussion</a>.)</p>
+    </dd>
+
+    <dt>Perl module <a href=
+    "http://search.cpan.org/dist/Config-IniFiles/">Config::IniFiles</a></dt>
+
+    <dd>
+      <p><dfn>used by:</dfn> the admin commands.</p>
+
+      <p><dfn>versions known to work:</dfn> RHEL-6: 2.72.</p>
+    </dd>
+
+    <dt>Perl module <a href=
+    "http://search.cpan.org/dist/DBD-SQLite/">DBD::SQLite</a></dt>
+
+    <dd>
+      <p><dfn>used by:</dfn> the admin commands.</p>
+
+      <p><dfn>versions known to work:</dfn> RHEL-6: 1.29.</p>
+    </dd>
+
+    <dt>Perl module <a href=
+    "http://search.cpan.org/dist/Alien-SVN/">SVN::Client</a></dt>
+
+    <dd>
+      <p><dfn>used by:</dfn> the admin commands.</p>
+
+      <p><dfn>versions known to work:</dfn> RHEL-6: 1.8.5 (RPM from <a href=
+      "http://opensource.wandisco.com/rhel/6/svn-1.8/RPMS/x86_64/">http://opensource.wandisco.com/</a>).</p>
+    </dd>
+
+    <dt>Perl module <a href=
+    "http://search.cpan.org/dist/XML-Parser/">XML::Parser</a></dt>
+
+    <dd>
+      <p><dfn>used by:</dfn> the code management commands.</p>
+
+      <p><dfn>versions known to work:</dfn> RHEL-6: 2.36.</p>
+    </dd>
+
+    <dt>Perl module <a href=
+    "http://search.cpan.org/~srezic/Tk-804.028/">Tk</a></dt>
+
+    <dd>
+      <p><dfn>used by:</dfn> <code>fcm gui</code>.</p>
+
+      <p><dfn>versions known to work:</dfn> RHEL-6: 804.028.</p>
+    </dd>
+
+    <dt><a href="http://subversion.apache.org/">Subversion</a></dt>
+
+    <dd>
+      <p><dfn>used by:</dfn> the code management commands, the extract system
+      of <code>fcm make</code>, the deprecated <code>fcm extract</code>.</p>
+
+      <p><dfn>versions known to work:</dfn>RHEL-6: 1.8.10.</p>
+
+      <p><dfn>remark:</dfn> you can use the extract system to mirror code to a
+      remote platform for building. Therefore it is only necessary to have
+      Subversion installed on the platform where you do your code development.
+      If you use other platforms purely for building and running then you do
+      not need to have Subversion installed on these platforms.</p>
+    </dd>
+
+    <dt><a href="http://trac.edgewall.org/">Trac</a></dt>
+
+    <dd>
+      <p><dfn>used by:</dfn> (optional, but highly recommended as a companion
+      to Subversion)</p>
+
+      <p><dfn>versions known to work:</dfn> RHEL-6: 1.0.5.</p>
+    </dd>
+
+    <dt><a href="http://furius.ca/xxdiff/">xxdiff</a></dt>
+
+    <dd>
+      <p><dfn>used by:</dfn> <code>fcm branch-diff --graphical</code>,
+      <code>fcm conflicts</code>, <code>fcm diff --graphical</code>.</p>
+
+      <p><dfn>versions known to work:</dfn> RHEL-6: 3.2.</p>
+
+      <p><dfn>remark:</dfn> The <code>fcm branch-diff --graphical</code> and
+      <code>fcm diff --graphical</code> commands use xxdiff by default but can
+      also use other graphical diff tools.</p>
+    </dd>
+
+    <dt><a href="http://www.gnu.org/software/diffutils/">GNU diffutils</a>:
+    diff3</dt>
+
+    <dd>
+      <p><dfn>used by:</dfn> the extract system of <code>fcm make</code>, the
+      deprecated <code>fcm extract</code>.</p>
+
+      <p><dfn>versions known to work:</dfn> RHEL-6: 2.8.1.</p>
+
+      <p><dfn>remark:</dfn>: used to merge changes to source files modified by
+      2+ diff source trees (compared with the base).</p>
+    </dd>
+
+    <dt><a href="http://rsync.samba.org/">rsync</a></dt>
+
+    <dd>
+      <p><dfn>used by:</dfn> the mirror system of <code>fcm make</code>, the
+      deprecated <code>fcm extract</code>.</p>
+
+      <p><dfn>versions known to work:</dfn> RHEL-6: 3.0.6.</p>
+
+      <p><dfn>remark:</dfn> used to mirror source file to another
+      <var>USER@HOST</var>.</p>
+    </dd>
+
+    <dt><a href="http://www.gnu.org/software/make/make.html">GNU make</a></dt>
+
+    <dd>
+      <p><dfn>used by:</dfn> the deprecated <code>fcm build</code>.</p>
+
+      <p><dfn>versions known to work:</dfn> RHEL-6: 3.81.</p>
+    </dd>
+  </dl>
+  </div>
+  </div>
+
+  <div class="row">
+  <div class="col-md-12">
+  <h2 id="distro">Content in the Distribution</h2>
+
+  <dl class="well">
+    <dt>ACKNOWLEDGEMENT.md<br />
+    CONTRIBUTING.md<br />
+    README.md<br />
+    COPYING</dt>
+
+    <dd>Terms of use and project information.</dd>
+
+    <dt>CHANGES.md</dt>
+
+    <dd>Contains highlight and noteworthy changes since release 2-3-1.</dd>
+
+    <dt>bin/</dt>
+
+    <dd>Contains the <code>fcm</code> user utilities.</dd>
+
+    <dt>doc/</dt>
+
+    <dd>FCM documentation.</dd>
+
+    <dt>doc/installation/</dt>
+
+    <dd>Contains this document.</dd>
+
+    <dt>doc/release_notes/</dt>
+
+    <dd>Contains release notes prior to and including release 2-3-1.</dd>
+
+    <dt>doc/user_guide/</dt>
+
+    <dd>Contains the <a href="../user_guide/">FCM User Guide</a>.</dd>
+
+    <dt>etc/</dt>
+
+    <dd>Miscellaneous items and example site configurations, including the
+    <samp>fcm/keyword.cfg.example</samp> file. If you wish to define keywords
+    for your site you will need to create the <samp>etc/fcm/keyword.cfg</samp>
+    file. An example file, <samp>fcm/keyword.cfg.example</samp>, is provided
+    which is a copy of the file currently used at the Met Office. For further
+    details please refer to the section <a
+    href="../user_guide/system_admin.html#fcm-keywords">FCM keywords</a> in the
+    System Admin chapter of the User Guide.</dd>
+
+    <dt>lib/</dt>
+
+    <dd>Contains the Perl library of FCM.</dd>
+
+    <dt>man/</dt>
+
+    <dd>Contains a basic manual page for <code>fcm</code>.</dd>
+
+    <dt>sbin/</dt>
+
+    <dd>Contains a selection of useful admin utility commands.</dd>
+
+    <dt>sbin/my-regular-update.example</dt>
+
+    <dd>An example of how you might set up a cron job to make use of the
+    <samp>&lt;repos&gt;.latest</samp> file (see
+    <code>svn-hooks/post-commit-background</code>).</dd>
+
+    <dt>svn-hooks/</dt>
+
+    <dd>Contains a selection of useful hook scripts for Subversion.</dd>
+
+    <dt>svn-hooks/pre-commit</dt>
+
+    <dd>
+      This script restricts write-access to the repository by checking the
+      following:
+
+      <ul>
+        <li>It executes the Subversion utility <code>svnperms.py</code> if it,
+        and the associated <samp>svnperms.conf</samp> file, exist. This utility
+        checks whether the author of the current transaction has enough
+        permission to write to particular paths in the repository.</li>
+
+        <li>It checks the disk space required by the current transaction. It
+        fails the commit if it requires more than 10MB of disk space (or
+        whatever is specified in the
+        <code>pre-commit-size-threshold.conf</code> file.</li>
+      </ul>
+    </dd>
+
+    <dt>svn-hooks/post-commit</dt>
+
+    <dd>This script runs <code>post-commit-background</code> in the
+    background.</dd>
+
+    <dt>svn-hooks/post-commit-background</dt>
+
+    <dd>
+      This script runs in the background after each commit.
+
+      <ul>
+        <li>It updates a <samp>&lt;repos&gt;.latest</samp> file with the latest
+        revision number.</li>
+
+        <li>It creates a dump of the new revision.</li>
+
+        <li>It calls <code>post-commit-background-custom</code> if it
+        exists.</li>
+      </ul>
+    </dd>
+
+    <dt>svn-hooks/pre-revprop-change</dt>
+
+    <dd>This script only allows the modification of <var>svn:log</var>.</dd>
+
+    <dt>svn-hooks/post-revprop-change</dt>
+
+    <dd>This script runs <code>post-revprop-change-background</code> in the
+    background.</dd>
+
+    <dt>svn-hooks/post-revprop-change-background</dt>
+
+    <dd>This script invokes the <code>trac-admin</code> command to
+    <code>resync</code> the revision property cache stored in the corresponding
+    Trac environment. If a user modifies the log message of a changeset and
+    he/she is not the original author of the changeset, this script will e-mail
+    the original author. If the file
+    <code>post-revprop-change-background-cc.list</code> exits, the script will
+    also e-mail those in the list.</dd>
+
+    <dt>t/</dt>
+
+    <dd>Contains functional test for FCM.</dd>
+
+    <dt>test/</dt>
+
+    <dd>Contains regression tests for FCM.</dd>
+
+    <dt>test/test_include/</dt>
+
+    <dd>Contains simple test code to check how your chosen compilers handle
+    include files.</dd>
+
+    <dt>tutorial/</dt>
+
+    <dd>Contains the files necessary to set up a Subversion repository for the
+    FCM tutorial. This will allow you to follow the <a href=
+    "../user_guide/getting_started.html#tutorial">tutorial section</a> in the
+    User Guide. See <samp>tutorial/README</samp> on how to set it up.</dd>
+  </dl>
+  </div>
+  </div>
+  </div>
+
+  <hr/>
+  <div class="container-fluid text-center">
+    <div class="row"><div class="col-md-12">
+    <address><small>
+      Copyright &copy; 2006-2021 British Crown (Met Office) &amp; Contributors.
+      <a href="http://www.metoffice.gov.uk">Met Office</a>.
+      See <a href="../etc/fcm-terms-of-use.html">Terms of Use</a>.<br />
+      This document is released under the British <a href=
+      "http://www.nationalarchives.gov.uk/doc/open-government-licence/" rel=
+      "license">Open Government Licence</a>.<br />
+    </small></address>
+    </div></div>
+  </div>
+
+  <script type="text/javascript" src="../etc/jquery.min.js"></script>
+  <script type="text/javascript" src="../etc/bootstrap/js/bootstrap.min.js"></script>
+  <script type="text/javascript" src="../etc/fcm.js"></script>
+  <script type="text/javascript" src="../etc/fcm-version.js"></script>
+</body>
+</html>

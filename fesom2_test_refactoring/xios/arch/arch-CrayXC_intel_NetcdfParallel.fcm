@@ -1,0 +1,27 @@
+################################################################################
+###################        Projet xios - xmlioserver       #####################
+################################################################################
+
+%CCOMPILER      CC -craype-verbose
+%FCOMPILER      ftn -craype-verbose
+%LINKER         CC -craype-verbose -Wl,"--allow-multiple-definition" -nofor-main
+
+#%BASE_CFLAGS   -DMPICH_SKIP_MPICXX -diag-disable 1125 -diag-disable 279
+%BASE_CFLAGS    -diag-disable 1125 -diag-disable 279
+%PROD_CFLAGS    -O3 -DBOOST_DISABLE_ASSERTS
+%DEV_CFLAGS     -g -O2 -traceback
+%DEBUG_CFLAGS   -DBZ_DEBUG -g -traceback -fno-inline 
+
+%BASE_FFLAGS    -D__NONE__
+%PROD_FFLAGS    -O3
+%DEV_FFLAGS     -g -O2 -traceback
+%DEBUG_FFLAGS   -g -traceback
+
+%BASE_INC       -D__NONE__
+%BASE_LD        -lstdc++ -lifcore -lirc_s -lirc
+
+#%CPP            cpp
+%CPP            CC -EP
+%FPP            cpp -P
+%MAKE           gmake
+
