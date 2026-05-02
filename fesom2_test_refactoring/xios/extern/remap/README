@@ -1,0 +1,32 @@
+Dependencies:
+
+  mpicxx
+  python-netcdf
+  python-mpi4py
+
+
+Running
+
+    make
+
+will create a shared library called
+
+    lib/libmapper.so
+
+
+Copy this library together with
+
+    py/remap.py
+
+in one directory, and from there call
+
+    python remap.py
+
+to see usage information.
+
+
+Memory debugging:
+
+    -DDEBUG -DAUTO_LEAK_FIX
+
+The latter tries to fix memory leaks automatically through reference counting, otherwise it reports the memory leaks only.

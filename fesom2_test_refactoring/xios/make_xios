@@ -1,0 +1,309 @@
+#!/bin/bash
+
+install_dir=$PWD
+compil_full="false"
+use_oasis="false"
+oasis="oasis3_mct"
+build_path="./"
+build_dir="./"
+build_suffixed="false"
+use_extern_boost="false"
+use_extern_blitz="false"
+use_memtrack="false"
+job="1"
+netcdf_lib="netcdf4_par"
+compil_mode="prod"
+arch_path=$PWD/"arch"
+arch_default_path=$PWD/"arch"
+arch_defined="FALSE"
+arch_path_defined="FALSE"
+fcm_version=old
+
+# Traitement de la ligne de commande
+while (($# > 0))
+   do
+      case $1 in
+         "-h"|"--help"|"-help")
+            echo "make_xios - installs XIOS on your architecture"
+	    echo "make_xios [options]"
+	    echo "options :"
+	    echo "       [--prod] : compilation in production mode (default)"
+	    echo "       [--dev] : compilation in development mode"
+	    echo "       [--debug] : compilation in debug mode"
+	    echo "       --arch arch : to choose target architecture"
+	    echo "       [--avail] : to know available target architectures "
+	    echo "       [--full] : to generate dependencies and recompile from scratch"
+	    echo "       [--use_oasis 'oasis3' 'oasis3_mct' : default oasis3_mct] : to use Oasis coupler"
+        echo "       [--build_path : absolute path to the build directory"
+        echo "       [--build_dir : name of the build directory"
+        echo "       [--build_suffixed : generate automatically suffixed name of the build directory (e.g. config_X64_CURIE_prod)"
+        echo "       [--use_extern_boost : to use external boost library"
+        echo "       [--use_extern_blitz : to use external blitz library"
+	    echo "       [--doc] : to generate Doxygen documentation (not available yet)"
+	    echo "       [--job ntasks] : to use parallel compilation with ntasks"
+	    echo "       [--netcdf_lib 'netcdf4_par'/'netcdf4_seq'/'netcdf4_internal' : default netcdf4_par] : choice of netcdf library"
+	    echo "       [--memtrack] : tracking memory leak - developper only"
+	    echo "       [--fcm] : fcm version compatibility : 'new'/'old'"
+	    echo "Example : ./make_xios --prod --arch PW6_VARGAS"
+	    echo "Example : ./make_xios --avail"
+            exit;;
+         "--prod")  compil_mode="prod"  ; shift ;;
+         "--dev")   compil_mode="dev"   ; shift ;;
+         "--debug") compil_mode="debug" ; shift ;;
+         "--arch")  arch=$2     ; arch_defined="TRUE"; shift ; shift ;;
+         "--arch_path")  arch_path=$2     ; arch_path_defined="TRUE"; shift ; shift ;;
+         "--avail") ls arch/*.fcm | cut -d"-" -f2 | cut -d"." -f1 ; exit ;; 
+         "--full")  compil_full="true"  ; shift ;;
+         "--use_oasis")  use_oasis="true" oasis=$2 ; shift ; shift  ;;
+         "--build_path")  build_path=$2     ; shift ; shift ;;
+         "--build_dir")  build_dir=$2     ; shift ; shift ;;
+         "--build_suffixed")  build_suffixed="true" ; shift  ;;
+         "--use_extern_boost")  use_extern_boost="true" ; shift  ;;
+         "--use_extern_blitz")  use_extern_blitz="true" ; shift  ;;
+         "--doc")   doc="true"          ; shift ;;
+         "--job")   job=$2              ; shift ; shift ;;
+         "--netcdf_lib")   netcdf_lib=$2 ; shift ; shift ;;
+         "--memtrack")  use_memtrack="true" memtrack=$2  ; shift ; shift ;;
+         "--fcm")       fcm_version=$2  ; shift ; shift ;;
+         *)         code="$1"           ; shift ;;
+      esac
+   done
+
+# Installation des sources
+nb_files_gz=`ls $install_dir/tools/archive | grep tar.gz | wc -l`
+if [ ${nb_files_gz} -ne 0 ]		   
+then
+    echo -e "- uncompress archives ..."		
+    for tarname in `ls $install_dir/tools/archive/*.tar.gz` ; do
+        if  ( [[ ${tarname} == "${install_dir}/tools/archive/boost.tar.gz" ]] && [[ "$use_extern_boost" == "true" ]] ) || ( [[ ${tarname} == "${install_dir}/tools/archive/blitz.tar.gz" ]] && [[ "$use_extern_blitz" == "true" ]] )
+        then
+                continue
+        fi
+	gunzip -f "$tarname"
+	tar -xf ${tarname%.gz}
+    done
+fi
+
+# Definition of the root directory of the build
+
+if [[ "$build_path" == "./" ]]; then
+  install_dir=$PWD
+else
+  install_dir=${build_path}
+fi
+
+if [[ "$build_suffixed" == "true" ]]; then
+    install_dir="${install_dir}/config_${arch}_${compil_mode}"
+else
+    install_dir="${install_dir}/${build_dir}"
+fi
+
+mkdir -p $install_dir
+
+rm -f ${PWD}/bld_dir.cfg
+echo "inc    ${install_dir}/arch.fcm" >> ${PWD}/bld_dir.cfg 
+echo "inc    ${install_dir}/config.fcm" >> ${PWD}/bld_dir.cfg
+echo "dir::root  ${install_dir}"   >> ${PWD}/bld_dir.cfg
+
+# Vérification de la présence d'un identifiant d'architecture.
+
+###############################################################
+# lecture des chemins propres a l'architecture de la machine #
+#           et configuration de l'environnement              #
+###############################################################
+
+rm -f .void_file
+echo > .void_file
+rm -rf .void_dir
+mkdir .void_dir
+
+if [[ "$arch_defined" == "TRUE" ]]
+then
+  rm -f ${install_dir}/arch.path
+  rm -f ${install_dir}/arch.fcm
+  rm -f ${install_dir}/arch.env
+
+  if test -f $arch_path/arch-${arch}.path
+  then
+    ln -s $arch_path/arch-${arch}.path ${install_dir}/arch.path
+  elif test -f $arch_default_path/arch-${arch}.path
+  then
+    ln -s $arch_default_path/arch-${arch}.path ${install_dir}/arch.path
+  fi
+        
+  if test -f $arch_path/arch-${arch}.fcm
+  then
+    ln -s $arch_path/arch-${arch}.fcm ${install_dir}/arch.fcm
+  elif test -f $arch_default_path/arch-${arch}.fcm
+  then
+    ln -s $arch_default_path/arch-${arch}.fcm ${install_dir}/arch.fcm
+  fi
+
+  if test -f $arch_path/arch-${arch}.env
+  then
+    ln -s $arch_path/arch-${arch}.env ${install_dir}/arch.env
+  elif test -f $arch_default_path/arch-${arch}.env
+  then
+    ln -s $arch_default_path/arch-${arch}.env ${install_dir}/arch.env
+  else
+    ln -s .void_file ${install_dir}/arch.env
+  fi
+  source ${install_dir}/arch.env
+  source ${install_dir}/arch.path
+else
+      echo "Please choose a target achitecture --> list all available architecture using make_xios --avail!"
+      exit 1
+fi
+
+# Vérification de la présence d'un mode de compilation.
+
+if [[ "$compil_mode" == "prod" ]]
+   then
+      COMPIL_CFLAGS="%PROD_CFLAGS"
+      COMPIL_FFLAGS="%PROD_FFLAGS"
+elif [[ "$compil_mode" == "dev" ]]
+   then 
+      COMPIL_CFLAGS="%DEV_CFLAGS"
+      COMPIL_FFLAGS="%DEV_FFLAGS"
+elif [[ "$compil_mode" == "debug" ]]
+   then
+      COMPIL_CFLAGS="%DEBUG_CFLAGS"
+      COMPIL_FFLAGS="%DEBUG_FFLAGS"
+fi
+
+rm -r $PWD/extern/netcdf4
+
+if [[ "$netcdf_lib" == "netcdf4_par" ]]
+   then
+     ln -s $PWD/.void_dir $PWD/extern/netcdf4
+     XIOS_CPPKEY="$XIOS_CPPKEY USING_NETCDF_PAR"
+elif [[ "$netcdf_lib" == "netcdf4_seq" ]]
+  then 
+    ln -s $PWD/.void_dir $PWD/extern/netcdf4
+elif [[ "$netcdf_lib" == "netcdf4_internal" ]]
+  then 
+    ln -s $PWD/extern/src_netcdf4 $PWD/extern/netcdf4
+    XIOS_CPPKEY="$XIOS_CPPKEY USING_NETCDF_PAR USING_NETCDF_INTERNAL"
+    export NETCDF_INCDIR="-I${PWD}/extern/netcdf4"
+    export NETCDF_LIBDIR=""
+    export NETCDF_LIB=""
+else
+   echo "Bad choice for --netcdf_lib argument : choose between 'netcdf4_par','netcdf4_seq' or 'netcdf4_internal'"
+   exit
+fi
+
+if [[ "$use_oasis" == "true" ]]
+   then
+    if [[ "$oasis" == "oasis3_mct" ]]
+    then
+	XIOS_CPPKEY="$XIOS_CPPKEY USE_OMCT"
+    elif [[ "$oasis" == "oasis3"  ]]
+    then
+	XIOS_CPPKEY="$XIOS_CPPKEY USE_OASIS"
+	OASIS_INCDIR="-I$PWD/../../prism/X64/build/lib/psmile.MPI1"
+	OASIS_LIBDIR="-L$PWD/../../prism/X64/lib"
+	OASIS_LIB="-lpsmile.MPI1 -lmpp_io"
+    else
+	echo "Bad choice for --use_oasis argument : choose between 'oasis3','oasis3_mct'"
+	exit
+    fi
+    NETCDF_LIB="-lnetcdff -lnetcdf"
+    XIOS_FINCDIR="$OASIS_INCDIR $XIOS_FINCDIR"
+    XIOS_LIB="$OASIS_LIBDIR $OASIS_LIB $XIOS_LIB"
+fi 
+
+# Setting path for boost
+if [[ "$use_extern_boost" == "true" ]]
+then
+   rm -r $PWD/extern/boost
+   ln -s $PWD/.void_dir $PWD/extern/boost
+else
+   export BOOST_INCDIR="-I${PWD}/extern/boost"
+   export BOOST_LIBDIR=""
+   export BOOST_LIB=""
+fi
+
+# Setting path for blitz
+if [[ "$use_extern_blitz" == "true" ]]
+then
+   rm -r $PWD/extern/blitz
+   ln -s $PWD/.void_dir $PWD/extern/blitz
+else
+   echo "src::blitz $PWD/extern/blitz/src" >> ${PWD}/bld_dir.cfg
+   export BLITZ_INCDIR="-I${PWD}/extern/blitz"
+   export BLITZ_LIBDIR=""
+   export BLITZ_LIB=""
+fi
+
+
+if [[ "$use_memtrack" == "true" ]]
+   then
+   XIOS_CPPKEY="$XIOS_CPPKEY XIOS_MEMTRACK"
+
+    if [[ "$memtrack" == "light" ]]
+    then
+	XIOS_CPPKEY="$XIOS_CPPKEY XIOS_MEMTRACK_LIGHT"
+    elif [[ "$memtrack" == "FULL"  ]]
+    then
+      XIOS_LIB="$ADDR2LINE_LIBDIR $ADDR2LINE_LIB $XIOS_LIB"
+      XIOS_CPPKEY="$XIOS_CPPKEY XIOS_MEMTRACK_FULL"
+    else
+	echo "Bad choice for --memtrack argument : choose between 'light','full'"
+	exit
+    fi
+fi 
+
+XIOS_CINCDIR="$NETCDF_INCDIR $HDF5_INCDIR $MPI_INCDIR $BOOST_INCDIR $BLITZ_INCDIR"
+XIOS_FINCDIR="$NETCDF_INCDIR $XIOS_FINCDIR $MPI_INCDIR $BOOST_INCDIR $BLITZ_INCDIR"
+
+XIOS_LIB="$XIOS_LIB $NETCDF_LIBDIR $HDF5_LIBDIR $MPI_LIBDIR $NETCDF_LIB $HDF5_LIB $MPI_LIB"
+
+rm -f ${install_dir}/config.fcm
+echo "%COMPIL_CFLAGS $COMPIL_CFLAGS" >> ${install_dir}/config.fcm
+echo "%COMPIL_FFLAGS $COMPIL_FFLAGS" >> ${install_dir}/config.fcm
+echo "%CPP_KEY       $XIOS_CPPKEY"   >> ${install_dir}/config.fcm
+
+echo "%CBASE_INC     $XIOS_CINCDIR" >> ${install_dir}/config.fcm     
+echo "%FBASE_INC     $XIOS_FINCDIR" >> ${install_dir}/config.fcm
+echo "%ARCH_LD       $XIOS_LIB"     >> ${install_dir}/config.fcm 
+
+echo "=> Using "$compil_mode" mode for compiling under architecture \""$arch"\" !"
+
+# Création de la documentation doxygen.
+if [[ !(-z $doc) ]]
+   then
+      echo -e "- Create Doxygen documentation (disabled)..."
+      #doxygen -s
+fi
+
+make_dir=$PWD
+
+if [[ "$fcm_version" == "new" ]]
+then
+  export PATH=$PWD/tools/FCM_NEW/bin:$PATH
+elif [[ "$fcm_version" == "old" ]]
+then
+  export PATH=$PWD/tools/FCM_OLD/bin:$PATH
+else
+  echo "=> Bad option for --fcm flag : "$fcm_version" , only 'new' or 'old' permitted"
+fi
+  
+if [[ "$compil_full" == "true" ]]
+   then
+   fcm build --clean --ignore-lock 
+   fcm build -f --ignore-lock -j $job
+else
+  fcm build --ignore-lock -j $job
+fi
+
+build_exit_status=$?
+
+if [[ $build_exit_status == 0 ]]
+  then
+  set nothing
+#    cd $WORKDIR/XIOS_NEMO_COUPLE/modeles/NEMO/WORK
+#    cd $WORKDIR/XIOS_NEMO/modeles/NEMO/WORK
+#    make
+fi
+
+exit $build_exit_status

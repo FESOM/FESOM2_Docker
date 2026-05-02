@@ -1,0 +1,30 @@
+#!/bin/bash
+##################
+## CURIE   CEA ##
+##################
+#MSUB -r remap       # nom de la requete
+#MSUB -o remap.out   # nom du fichier de sortie
+#MSUB -e remap.err
+#MSUB -n 64       # reservation des processeurs pour le job
+##MSUB -c 1           # reservation des processeurs pour le job
+#MSUB -x             # exclusif
+#MSUB -T 1800           # Limite temps (en secondes)
+#MSUB -p gen7357
+##MSUB -Q test                # QoS test
+#MSUB -q standard            # Choosing standard nodes
+#MSUB -X            # X11 forwarding
+
+
+cd $BRIDGE_MSUB_PWD 
+
+ulimit -a
+ulimit -aH
+
+module load mpiprofile/bullxmpi/performance
+module load ddt
+
+ccc_mprun  -d tv ../test
+#ccc_mprun   ../test
+#ddt -start -n 64   ../test
+#ccc_mprun -d tv ../bin/main.exe < in_t740
+#ccc_mprun  ../bin/main.exe < in_t740

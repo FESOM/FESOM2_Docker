@@ -1,0 +1,42 @@
+################################################################################
+###################        Projet xios - xmlioserver       #####################
+################################################################################
+
+# Cray XC build instructions for XIOS/xios-1.0
+# These files have been tested on 
+# Archer (XC30), ECMWF (XC30), and the Met Office (XC40) using the Cray PrgEnv.
+# One must also: 
+#    module load cray-netcdf-hdf5parallel/4.3.2
+# There is a bug in the CC compiler prior to cce/8.3.7 using -O3 or -O2
+# The workarounds are not ideal:
+# Use -Gfast and put up with VERY large executables
+# Use -O1 and possibly suffer a significant performance loss.
+#
+# Mike Rezny Met Office 23/03/2015
+
+%CCOMPILER      CC
+%FCOMPILER      ftn
+%LINKER         CC
+
+%BASE_CFLAGS    -DMPICH_SKIP_MPICXX -h msglevel_4 -h zero -h gnu
+
+## Only use -O3 if you can load module cce/8.3.7 or later
+%PROD_CFLAGS    -O3 -DBOOST_DISABLE_ASSERTS
+
+## Otherwise take your pick of these, refer to information above.
+#PROD_CFLAGS    -O1 -DBOOST_DISABLE_ASSERTS
+## PROD_CFLAGS    -Gfast -DBOOST_DISABLE_ASSERTS
+%DEV_CFLAGS     -O2
+%DEBUG_CFLAGS   -g 
+
+%BASE_FFLAGS    -em -m 4 -e0 -eZ
+%PROD_FFLAGS    -O3
+%DEV_FFLAGS     -G2
+%DEBUG_FFLAGS   -g -emf -m 4 -e0 -eZ
+
+%BASE_INC       -D__NONE__
+%BASE_LD        -D__NONE__
+
+%CPP            cpp
+%FPP            cpp -P -CC
+%MAKE           gmake

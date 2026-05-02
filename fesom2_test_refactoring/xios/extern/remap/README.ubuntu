@@ -1,0 +1,1 @@
+sudo apt-get install python-mpi4py python-netcdf

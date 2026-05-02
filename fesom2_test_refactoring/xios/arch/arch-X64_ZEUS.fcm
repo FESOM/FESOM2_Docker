@@ -1,0 +1,23 @@
+# Environment to compile XIOS on ZEUS cluster at CMCC
+
+%CCOMPILER      mpiicc
+%FCOMPILER      mpiifort
+%LINKER         mpiifort -nofor-main
+
+%BASE_CFLAGS    -diag-disable 1125 -diag-disable 279 -std=c++11
+%PROD_CFLAGS    -O3 -D BOOST_DISABLE_ASSERTS
+%DEV_CFLAGS     -g -traceback
+%DEBUG_CFLAGS   -DBZ_DEBUG -g -traceback -fno-inline
+
+%BASE_FFLAGS    -D__NONE__
+%PROD_FFLAGS    -O3 -r8 -fp-model source -xSKYLAKE-AVX512 -qopt-zmm-usage=low -no-fma
+%DEV_FFLAGS     -g -O2 -traceback
+%DEBUG_FFLAGS   -g -traceback
+
+%BASE_INC       -D__NONE__
+%BASE_LD        -lstdc++ -lgpfs
+
+%CPP            mpiicc -EP
+%FPP            cpp -P
+%MAKE           gmake
+

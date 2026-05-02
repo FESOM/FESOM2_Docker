@@ -1,0 +1,170 @@
+#!/usr/bin/perl
+# ------------------------------------------------------------------------------
+# Copyright (C) 2006-2021 British Crown (Met Office) & Contributors.
+#
+# This file is part of FCM, tools for managing and building source code.
+#
+# FCM is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# FCM is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with FCM. If not, see <http://www.gnu.org/licenses/>.
+# ------------------------------------------------------------------------------
+
+use strict;
+use warnings;
+
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+use File::Basename qw{basename};
+use File::Spec;
+
+use FCM::Admin::Config;
+use FCM::Admin::Runner;
+use FCM::Admin::System qw{
+    distribute_wc
+    filter_projects
+    get_projects_from_svn_live
+    install_svn_hook
+};
+use FCM::Admin::Util qw{
+    run_mkpath
+    run_rmtree
+    run_svn_info
+    run_svn_update
+    write_file
+};
+use Getopt::Long qw{GetOptions};
+use Pod::Usage qw{pod2usage};
+use Text::ParseWords qw{shellwords};
+
+# ------------------------------------------------------------------------------
+my $CONFIG = FCM::Admin::Config->instance();
+my %PATTERN_OF = (
+    q{}      => qr{.*}xms,
+    SRC_HOOK => qr{svn-hooks/}xms,
+);
+
+if (!caller()) {
+    main(@ARGV);
+}
+
+# ------------------------------------------------------------------------------
+# The main logic.
+sub main {
+    local(@ARGV) = @_;
+    my %option;
+    my $result = GetOptions(
+        \%option,
+        q{help|usage|h},
+        q{force},
+    );
+    if (!$result) {
+        pod2usage(1);
+    }
+    if (exists($option{help})) {
+        pod2usage(q{-verbose} => 1);
+    }
+    create_lock() || return;
+    my $RUNNER = FCM::Admin::Runner->instance();
+    my $is_force = $option{'force'};
+    UPDATE:
+    while (1) {
+        my @updates;
+        for my $source_key (shellwords($CONFIG->get_mirror_keys())) {
+            my $method = "get_$source_key";
+            push(@updates, run_svn_update($CONFIG->$method()));
+        }
+        if (!$is_force && !@updates) {
+            last UPDATE;
+        }
+        if ($is_force || grep {$_ =~ $PATTERN_OF{'SRC_HOOK'}} @updates) {
+            $RUNNER->run(
+                '(re-)installing hook scripts',
+                sub {
+                    for my $project (get_projects_from_svn_live()) {
+                        install_svn_hook($project);
+                    }
+                    return 1;
+                }
+            );
+        }
+        if ($is_force || grep {$_ =~ $PATTERN_OF{q{}}} @updates) {
+            $RUNNER->run(
+                'distributing FCM to standard locations', \&distribute_wc);
+        }
+        $is_force = 0;
+    }
+}
+
+# ------------------------------------------------------------------------------
+# Creates a lock. Returns true on success. Removes lock when program finishes.
+our $LOCK;
+sub create_lock {
+    my $home = (getpwuid($<))[7];
+    $LOCK = File::Spec->catfile($home, sprintf(".%s.lock", basename($0)));
+    if (-e $LOCK) {
+        $LOCK = undef;
+        return;
+    }
+    return run_mkpath($LOCK);
+    END {
+        if ($LOCK) {
+            run_rmtree($LOCK);
+        }
+    }
+}
+
+__END__
+
+=head1 NAME
+
+fcm-commit-update
+
+=head1 SYNOPSIS
+
+    fcm-commit-update
+
+=head1 DESCRIPTION
+
+This program performs the post-commit update for the FCM system. It runs
+continuously until no more update is available. It prevent another copy from
+running by creating a lock. If another copy detects a lock, it exits without
+doing anything.
+
+=head1 OPTIONS
+
+=over 4
+
+=item --force
+
+Force an update.
+
+=back
+
+=head1 ARGUMENTS
+
+=over 4
+
+=item REPOS-NAME
+
+The name of the repository invoking this program.
+
+=item LOG-DIR-PATH
+
+The path to the log directory.
+
+=back
+
+=head1 COPYRIGHT
+
+Copyright (C) 2006-2021 British Crown (Met Office) & Contributors.
+
+=cut

@@ -1,0 +1,75 @@
+=head1 NAME
+
+fcm make
+
+=head1 SYNOPSIS
+
+Invokes the FCM make system. See the user guide for detail.
+
+    fcm make [OPTIONS] [DECLARATION ...]
+
+=head1 ARGUMENTS
+
+Each argument is considered to be a declaration line to append to the
+configuration file.
+
+=head1 OPTIONS
+
+=over 4
+
+=item --archive, -a
+
+Switch on archive mode. In archive mode, intermediate files will be put into
+TAR-GZIP archives on completion, e.g. extract system:
+C<.fcm-make/cache/extract/>, and build system: C<build/include/> and
+C<build/o/>.
+
+The archive mode is not suitable for a make that will be inherited or used by
+other makes.
+
+=item --config-file-path=PATH, -F PATH
+
+Specify paths for searching configuration files specified in relative paths.
+
+=item --config-file=PATH, --file=PATH, -f PATH
+
+Specify paths to the configuration files. (default = fcm-make.cfg in the
+current working directory)
+
+=item --directory=PATH, -C PATH
+
+Change directory to C<PATH> before doing anything. (default = $PWD)
+
+=item --ignore-lock
+
+Ignore lock file. When the system is invoked, it sets up a lock file in the
+destination.  The lock is normally removed when the system completes the make.
+While the lock file is in place, another make invoked in the same destination
+will fail. This option can be used to bypass this check.
+
+=item --jobs=N, -j N
+
+Specify the number of (child) processes that can be run simultaneously.
+
+=item --name=NAME, -n NAME
+
+Specify a name for the make, so that the command will search for
+fcm-makeC<NAME>.cfg instead of fcm-make.cfg, and will write context files in
+.fcm-makeC<NAME>/ and log files as fcm-makeC<NAME>.log, etc.
+
+=item --new, -N
+
+Remove items in the destination created by the previous make, and starts a new
+make.
+
+=item --quiet, -q
+
+Decrease the verbosity level.
+
+=item --verbose, -v
+
+Increase the verbosity level.
+
+=back
+
+=cut

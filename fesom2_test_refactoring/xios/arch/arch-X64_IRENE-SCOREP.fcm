@@ -1,0 +1,26 @@
+################################################################################
+###################                Projet XIOS               ###################
+################################################################################
+
+%CCOMPILER      scorep --nocompiler --nomemory --mpp=mpi --user mpicc -DSCOREP
+%FCOMPILER      scorep --nocompiler --nomemory --mpp=mpi --user mpif90 -DSCOREP
+%LINKER         scorep --nocompiler --nomemory --mpp=mpi --user mpif90 -DSCOREP -nofor-main
+
+%BASE_CFLAGS    -std=c++11 -diag-disable 1125 -diag-disable 279
+%PROD_CFLAGS    -Ofast -xHost -D BOOST_DISABLE_ASSERTS 
+#%DEV_CFLAGS     -g -traceback
+%DEV_CFLAGS     -g 
+%DEBUG_CFLAGS   -DBZ_DEBUG -g -traceback -fno-inline
+
+%BASE_FFLAGS    -D__NONE__ 
+%PROD_FFLAGS    -O3 -g -traceback
+#%DEV_FFLAGS     -g -traceback
+%DEV_FFLAGS     -g 
+%DEBUG_FFLAGS   -g -traceback
+
+%BASE_INC       -D__NONE__
+%BASE_LD        -lstdc++
+
+%CPP            mpicc -EP
+%FPP            cpp -P
+%MAKE           gmake

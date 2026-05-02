@@ -1,0 +1,17 @@
+NETCDF_INCDIR="-I${EBROOTNETCDFMINFORTRAN}/include -I${EBROOTNETCDF}/include -I${EBROOTPARALLELMINNETCDF}/include"
+NETCDF_LIBDIR="-L${EBROOTNETCDFMINFORTRAN}/lib -L${EBROOTNETCDF}/lib64 -L${EBROOTPARALLELMINNETCDF}/lib"
+NETCDF_LIB="-L${EBROOTNETCDFMINFORTRAN}/lib -lnetcdff -L${EBROOTNETCDF}/lib64 -lnetcdf -L${EBROOTPARALLELMINNETCDF}/lib -lpnetcdf"
+#NETCDF_LIB="-lnetcdff_parallel_intel -lnetcdff_parallel -lnetcdff -lnetcdf_c++4_parallel_intel -lnetcdf_c++4_parallel -lnetcdf_c++4 -lnetcdf_parallel_intel -lnetcdf_parallel -lnetcdf"
+
+MPI_INCDIR=""
+MPI_LIBDIR=""
+MPI_LIB=""
+
+HDF5_INCDIR="-I${EBROOTHDF5}/include"
+HDF5_LIBDIR="-L${EBROOTHDF5}/lib"
+HDF5_LIB="-L${EBROOTHDF5}/lib -lhdf5_hl -L${EBROOTHDF5}/lib -lhdf5"
+
+OASIS_INCDIR="-I @oasis_inc@"
+OASIS_LIBDIR="-L @oasis_lib@"
+OASIS_LIB="-lpsmile -lscrip -lmct -lmpeu"
+
