@@ -494,7 +494,7 @@ namespace xios {
          {
            closeAllFile();
            registryOut->hierarchicalGatherRegistry() ;
-           if (server->intraCommRank==0) CXios::globalRegistry->mergeRegistry(*registryOut) ;
+           if (server->intraCommRank==0 && CXios::globalRegistry) CXios::globalRegistry->mergeRegistry(*registryOut) ;
          }
 
          //! Deallocate client buffers
@@ -534,7 +534,7 @@ namespace xios {
          if (hasServer && !hasClient)
          {           
            registryOut->hierarchicalGatherRegistry() ;
-           if (server->intraCommRank==0) CXios::globalRegistry->mergeRegistry(*registryOut) ;
+           if (server->intraCommRank==0 && CXios::globalRegistry) CXios::globalRegistry->mergeRegistry(*registryOut) ;
          }
 
          //! Deallocate client buffers
