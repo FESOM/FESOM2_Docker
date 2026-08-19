@@ -25,7 +25,7 @@ ENV TZ=UTC
 # ---------------------------------------------------------------- oneAPI ---
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        ca-certificates curl gpg-agent \
+        ca-certificates curl gpg gpg-agent \
     && curl -fsSL https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
        | gpg --dearmor > /usr/share/keyrings/intel-oneapi-archive-keyring.gpg \
     && echo "deb [signed-by=/usr/share/keyrings/intel-oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \
